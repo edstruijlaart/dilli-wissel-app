@@ -13,7 +13,7 @@ export default function ViewerView({ code, onBack }) {
   const [timer, setTimer] = useState(0);
   const [goalToast, setGoalToast] = useState(null);
   const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
-  const prevEventsLen = useRef(0);
+  const prevEventsLen = useRef(-1); // -1 = nog niet geïnitialiseerd
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
   useEffect(() => {
@@ -23,11 +23,19 @@ export default function ViewerView({ code, onBack }) {
 
   // Detecteer nieuwe doelpunten en schiet confetti af
   useEffect(() => {
+    if (events.length === 0) return;
+
+    // Eerste keer events laden: onthoud aantal maar trigger GEEN effecten
+    if (prevEventsLen.current === -1) {
+      prevEventsLen.current = events.length;
+      return;
+    }
+
     if (events.length <= prevEventsLen.current) {
       prevEventsLen.current = events.length;
       return;
     }
-    // Check alleen de nieuwe events
+    // Check alleen de nieuwe events (na initialisatie)
     const newEvents = events.slice(prevEventsLen.current);
     prevEventsLen.current = events.length;
 
@@ -351,19 +359,73 @@ function MatchSummary({ match, events, code, onBack }) {
           </div>
         )}
 
+        {/* Deel uitslag */}
+        <button onClick={() => shareResult(match, events)} style={{
+          width: "100%", padding: "14px 24px",
+          background: "linear-gradient(135deg, #25D366, #128C7E)",
+          border: "none", borderRadius: 14,
+          fontWeight: 700, fontSize: 15, cursor: "pointer",
+          fontFamily: "'DM Sans',sans-serif", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
+          animation: "summaryIn 0.5s ease-out 0.4s both"
+        }}>
+          {Icons.share(16, "#fff")} Deel uitslag
+        </button>
+
         {/* Terug knop */}
         <button onClick={onBack} style={{
           width: "100%", padding: "14px 24px", background: T.glass,
           border: `1px solid ${T.glassBorder}`, borderRadius: 14,
           fontWeight: 600, fontSize: 15, cursor: "pointer",
           fontFamily: "'DM Sans',sans-serif", color: T.textDim,
-          animation: "summaryIn 0.5s ease-out 0.4s both"
+          marginTop: 8,
+          animation: "summaryIn 0.5s ease-out 0.5s both"
         }}>
           Terug naar start
         </button>
       </div>
     </div>
   );
+}
+
+function buildShareText(match, events) {
+  const home = match.homeTeam || 'Thuis';
+  const away = match.awayTeam || 'Uit';
+  const won = match.homeScore > match.awayScore;
+  const draw = match.homeScore === match.awayScore;
+  const emoji = won ? '🎉' : draw ? '🤝' : '😤';
+
+  let text = `${emoji} ${home} ${match.homeScore} - ${match.awayScore} ${away}\n`;
+
+  // Doelpuntmakers
+  const goals = events.filter(ev => ev.type === 'goal_home' && ev.scorer);
+  if (goals.length > 0) {
+    const scorerCount = {};
+    goals.forEach(g => { scorerCount[g.scorer] = (scorerCount[g.scorer] || 0) + 1; });
+    const scorerStr = Object.entries(scorerCount)
+      .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
+      .join(', ');
+    text += `⚽ ${scorerStr}\n`;
+  }
+
+  return text.trim();
+}
+
+function shareResult(match, events) {
+  const text = buildShareText(match, events);
+
+  // Probeer Web Share API eerst (werkt op iOS + Android)
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {
+      // Fallback: kopieer naar klembord
+      navigator.clipboard?.writeText(text);
+    });
+  } else {
+    // Desktop fallback: WhatsApp web
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  }
 }
 
 function formatEvent(ev) {

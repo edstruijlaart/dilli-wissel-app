@@ -1,11 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { T, base, card, btnP, mono } from '../theme';
 import { fmt } from '../utils/format';
 import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 export default function SummaryView({ state, onNewMatch }) {
-  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore } = state;
+  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore, matchCode } = state;
+  const [goalEvents, setGoalEvents] = useState([]);
+
+  // Haal doelpunten op van server voor share-functie
+  useEffect(() => {
+    if (!matchCode) return;
+    fetch(`/api/match/events/${matchCode}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(evs => setGoalEvents(evs.filter(e => e.type === 'goal_home' || e.type === 'goal_away')))
+      .catch(() => {});
+  }, [matchCode]);
 
   const sorted = [...players].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0));
   const max = Math.max(...Object.values(playTime), 1);
@@ -68,8 +78,50 @@ export default function SummaryView({ state, onNewMatch }) {
             </div>
           </div>
         )}
+        <button onClick={() => shareCoachResult({ homeTeam, awayTeam, homeScore, awayScore }, goalEvents)} style={{
+          width: "100%", padding: "14px 24px", marginBottom: 10,
+          background: "linear-gradient(135deg, #25D366, #128C7E)",
+          border: "none", borderRadius: 14,
+          fontWeight: 700, fontSize: 15, cursor: "pointer",
+          fontFamily: "'DM Sans',sans-serif", color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          boxShadow: "0 4px 16px rgba(37,211,102,0.3)"
+        }}>
+          {Icons.share(16, "#fff")} Deel uitslag
+        </button>
         <button onClick={onNewMatch} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, boxShadow: "0 4px 16px rgba(22,163,74,0.25)" }}>Nieuwe wedstrijd</button>
       </div>
     </div>
   );
+}
+
+function shareCoachResult(match, goalEvents) {
+  const home = match.homeTeam || 'Thuis';
+  const away = match.awayTeam || 'Uit';
+  const won = match.homeScore > match.awayScore;
+  const draw = match.homeScore === match.awayScore;
+  const emoji = won ? '🎉' : draw ? '🤝' : '😤';
+
+  let text = `${emoji} ${home} ${match.homeScore} - ${match.awayScore} ${away}\n`;
+
+  // Doelpuntmakers (alleen thuisdoelpunten met scorer)
+  const homeGoals = goalEvents.filter(e => e.type === 'goal_home' && e.scorer);
+  if (homeGoals.length > 0) {
+    const scorerCount = {};
+    homeGoals.forEach(g => { scorerCount[g.scorer] = (scorerCount[g.scorer] || 0) + 1; });
+    const scorerStr = Object.entries(scorerCount)
+      .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
+      .join(', ');
+    text += `⚽ ${scorerStr}\n`;
+  }
+
+  // Probeer Web Share API eerst (werkt op iOS + Android)
+  if (navigator.share) {
+    navigator.share({ text: text.trim() }).catch(() => {
+      navigator.clipboard?.writeText(text.trim());
+    });
+  } else {
+    const url = `https://wa.me/?text=${encodeURIComponent(text.trim())}`;
+    window.open(url, '_blank');
+  }
 }
