@@ -7,17 +7,18 @@ import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Stepper from '../components/Stepper';
 
-export default function SetupView({ state }) {
+export default function SetupView({ state, onStartMatch }) {
   const {
     players, setPlayers, keeper, setKeeper, newPlayer, setNewPlayer,
     playersOnField, setPlayersOnField, halfDuration, setHalfDuration,
     halves, setHalves, subInterval, setSubInterval,
     homeTeam, setHomeTeam, awayTeam, setAwayTeam,
+    team, setTeam, isOnline,
     totalMatchTime, showPaste, setShowPaste,
     clipboardNames, setClipboardNames, showClipBanner, setShowClipBanner,
     clipDismissed, setClipDismissed, pasteText, setPasteText,
     pasteResult, setPasteResult,
-    addPlayer, removePlayer, movePlayer, toggleKeeper, startMatch,
+    addPlayer, removePlayer, movePlayer, toggleKeeper,
   } = state;
 
   const parsePastedNames = () => {
@@ -68,6 +69,12 @@ export default function SetupView({ state }) {
 
         <div style={{ ...card, padding: 20, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: T.textDim, marginBottom: 16, textTransform: "uppercase", letterSpacing: 1 }}>Wedstrijd</div>
+          {isOnline && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Team</div>
+              <input type="text" value={team} onChange={e => setTeam(e.target.value)} placeholder="Bijv. JO8-2" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <Stepper label="In veld" value={playersOnField} set={setPlayersOnField} min={3} step={1} />
             <Stepper label="Helften" value={halves} set={setHalves} min={1} step={1} />
@@ -164,7 +171,7 @@ export default function SetupView({ state }) {
           {players.length > 0 && <button onClick={() => { setPlayers([]); setKeeper(null); }} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 12, cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans',sans-serif" }}>Alles wissen</button>}
         </div>
 
-        <button onClick={startMatch} disabled={!canStart} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, opacity: canStart ? 1 : 0.3, cursor: canStart ? "pointer" : "not-allowed", boxShadow: canStart ? "0 4px 16px rgba(22,163,74,0.25)" : "none" }}>
+        <button onClick={onStartMatch} disabled={!canStart} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, opacity: canStart ? 1 : 0.3, cursor: canStart ? "pointer" : "not-allowed", boxShadow: canStart ? "0 4px 16px rgba(22,163,74,0.25)" : "none" }}>
           {!canStart ? `Nog ${Math.max(1, playersOnField - players.length + 1)} speler${playersOnField - players.length + 1 !== 1 ? "s" : ""} nodig` : "Start wedstrijd →"}
         </button>
       </div>

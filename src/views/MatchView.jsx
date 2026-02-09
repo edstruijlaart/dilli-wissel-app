@@ -13,9 +13,10 @@ export default function MatchView({ state }) {
     isRunning, isPaused, setIsPaused, showSubAlert, suggestedSubs,
     halfBreak, manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
-    homeTeam, awayTeam, homeScore, setHomeScore, awayScore, setAwayScore,
+    homeTeam, awayTeam, homeScore, awayScore,
     onField, onBench, playTime, setView, setIsRunning,
-    executeSubs, skipSubs, startNextHalf, manualSub, swapKeeper,
+    executeSubs, skipSubs, startNextHalf, manualSub, swapKeeper, updateScore,
+    matchCode, isOnline, syncError,
   } = state;
 
   const hs = halfDuration * 60;
@@ -28,6 +29,13 @@ export default function MatchView({ state }) {
   return (
     <div style={base}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+        {/* Online indicator */}
+        {isOnline && matchCode && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
+            {syncError || `Live · Code: ${matchCode}`}
+          </div>
+        )}
         {/* Timer */}
         <div style={{ ...card, padding: 20, marginBottom: 10, position: "relative", overflow: "hidden" }}>
           {urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
@@ -64,18 +72,18 @@ export default function MatchView({ state }) {
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{homeTeam || "Thuis"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <button onClick={() => setHomeScore(Math.max(0, homeScore - 1))} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
+              <button onClick={() => updateScore('home', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{homeScore}</span>
-              <button onClick={() => { setHomeScore(homeScore + 1); fireConfetti(); vibrate([100, 50, 200]); }} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => { updateScore('home', 1); fireConfetti(); vibrate([100, 50, 200]); }} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
           <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300, padding: "0 4px" }}>–</div>
           <div style={{ flex: 1, textAlign: "center" }}>
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{awayTeam || "Uit"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <button onClick={() => setAwayScore(Math.max(0, awayScore - 1))} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
+              <button onClick={() => updateScore('away', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{awayScore}</span>
-              <button onClick={() => setAwayScore(awayScore + 1)} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => updateScore('away', 1)} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
         </div>

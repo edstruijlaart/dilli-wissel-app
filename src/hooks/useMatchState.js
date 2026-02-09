@@ -39,10 +39,98 @@ export function useMatchState() {
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
 
+  // Multiplayer state
+  const [matchCode, setMatchCode] = useState(null);
+  const [isOnline, setIsOnline] = useState(false);
+  const [team, setTeam] = useState("");
+  const [syncError, setSyncError] = useState(null);
+
   const intervalRef = useRef(null);
   const alertShownRef = useRef(false);
+  const syncTimeoutRef = useRef(null);
   const totalMatchTime = halfDuration * halves;
 
+  // --- API Sync ---
+  const getMatchSnapshot = useCallback(() => ({
+    status: view === VIEWS.MATCH ? (halfBreak ? 'halftime' : isRunning ? (isPaused ? 'paused' : 'live') : 'ended') : view === VIEWS.SUMMARY ? 'ended' : 'setup',
+    team,
+    homeTeam, awayTeam,
+    players, keeper: matchKeeper,
+    matchKeeper,
+    playersOnField, halfDuration, halves, subInterval,
+    onField, onBench,
+    homeScore, awayScore,
+    currentHalf,
+    // Timer sync via timestamps
+    timerStartedAt: (isRunning && !isPaused && !halfBreak) ? new Date(Date.now() - matchTimer * 1000).toISOString() : null,
+    elapsedAtPause: matchTimer,
+    subTimerStartedAt: (isRunning && !isPaused && !halfBreak) ? new Date(Date.now() - subTimer * 1000).toISOString() : null,
+    subElapsedAtPause: subTimer,
+    playTime,
+    isRunning, isPaused, halfBreak,
+  }), [view, team, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime]);
+
+  const syncToServer = useCallback(() => {
+    if (!isOnline || !matchCode) return;
+    clearTimeout(syncTimeoutRef.current);
+    // Debounce: wacht 300ms zodat snelle opeenvolgende updates worden gebundeld
+    syncTimeoutRef.current = setTimeout(async () => {
+      try {
+        const snapshot = getMatchSnapshot();
+        await fetch(`/api/match/${matchCode}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(snapshot),
+        });
+        setSyncError(null);
+      } catch (err) {
+        console.error('Sync error:', err);
+        setSyncError('Sync mislukt');
+      }
+    }, 300);
+  }, [isOnline, matchCode, getMatchSnapshot]);
+
+  const addEvent = useCallback(async (event) => {
+    if (!isOnline || !matchCode) return;
+    try {
+      await fetch(`/api/match/events/${matchCode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      });
+    } catch (err) {
+      console.error('Event sync error:', err);
+    }
+  }, [isOnline, matchCode]);
+
+  // Sync bij elke relevante state wijziging
+  useEffect(() => {
+    if (isOnline && matchCode && view !== VIEWS.SETUP) syncToServer();
+  }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view]);
+
+  // --- Online wedstrijd aanmaken ---
+  const createOnlineMatch = useCallback(async () => {
+    try {
+      const res = await fetch('/api/match/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          team, homeTeam, awayTeam, players, keeper,
+          playersOnField, halfDuration, halves, subInterval,
+        }),
+      });
+      const data = await res.json();
+      setMatchCode(data.code);
+      setIsOnline(true);
+      return data.code;
+    } catch (err) {
+      console.error('Create match error:', err);
+      setSyncError('Wedstrijd aanmaken mislukt');
+      return null;
+    }
+  }, [team, homeTeam, awayTeam, players, keeper, playersOnField, halfDuration, halves, subInterval]);
+
+  // --- Bestaande logica ---
   const addPlayer = () => { const n = newPlayer.trim(); if (n && !players.includes(n)) { setPlayers([...players, n]); setNewPlayer(""); } };
   const removePlayer = (name) => { setPlayers(players.filter(p => p !== name)); if (keeper === name) setKeeper(null); };
   const movePlayer = (i, d) => { const a = [...players]; const n = i + d; if (n < 0 || n >= a.length) return; [a[i], a[n]] = [a[n], a[i]]; setPlayers(a); };
@@ -69,6 +157,7 @@ export function useMatchState() {
     setSubHistory([]); setHalfBreak(false); alertShownRef.current = false;
     setHomeScore(0); setAwayScore(0);
     setView(VIEWS.MATCH);
+    addEvent({ type: 'match_start', time: '0:00', half: 1 });
   };
 
   // Timer tick
@@ -83,6 +172,13 @@ export function useMatchState() {
     return () => clearInterval(intervalRef.current);
   }, [isRunning, isPaused, halfBreak]);
 
+  // Periodieke sync elke 10 seconden (voor playTime updates)
+  useEffect(() => {
+    if (!isOnline || !matchCode || !isRunning || isPaused || halfBreak) return;
+    const iv = setInterval(syncToServer, 10000);
+    return () => clearInterval(iv);
+  }, [isOnline, matchCode, isRunning, isPaused, halfBreak, syncToServer]);
+
   // Half end + sub alert detection
   useEffect(() => {
     if (!isRunning || isPaused || halfBreak) return;
@@ -90,8 +186,13 @@ export function useMatchState() {
     const he = matchTimer - (currentHalf - 1) * hs;
     if (he >= hs) {
       clearInterval(intervalRef.current);
-      if (currentHalf < halves) { setHalfBreak(true); setShowSubAlert(false); notifyHalf(); }
-      else { setIsRunning(false); notifyEnd(); setView(VIEWS.SUMMARY); }
+      if (currentHalf < halves) {
+        setHalfBreak(true); setShowSubAlert(false); notifyHalf();
+        addEvent({ type: 'half_end', time: fmt(matchTimer), half: currentHalf });
+      } else {
+        setIsRunning(false); notifyEnd(); setView(VIEWS.SUMMARY);
+        addEvent({ type: 'match_end', time: fmt(matchTimer), half: currentHalf });
+      }
       return;
     }
     if (subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
@@ -108,12 +209,14 @@ export function useMatchState() {
     setOnBench(onBench.filter(p => !inn.includes(p)).concat(out));
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] }]);
     setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false;
+    addEvent({ type: 'sub_auto', time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] });
   };
 
   const skipSubs = () => { setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false; };
 
   const startNextHalf = () => {
     setCurrentHalf(p => p + 1); setHalfBreak(false); setSubTimer(0); alertShownRef.current = false;
+    addEvent({ type: 'half_start', time: fmt(matchTimer), half: currentHalf + 1 });
     if (onBench.length > 0) { setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper)); setShowSubAlert(true); notifySub(); }
   };
 
@@ -123,22 +226,34 @@ export function useMatchState() {
     setOnBench(onBench.map(p => (p === bp ? fp : p)));
     if (wasKeeper) setMatchKeeper(bp);
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [fp], inn: [bp], manual: true, keeperSwap: wasKeeper }]);
+    addEvent({ type: 'sub_manual', time: fmt(matchTimer), half: currentHalf, out: [fp], inn: [bp] });
   };
 
   const swapKeeper = (newKeeper) => {
     const fromBench = onBench.includes(newKeeper);
     if (fromBench) {
-      // Bankspeler wordt keeper: oude keeper gaat naar bank
       const oldKeeper = matchKeeper;
       setOnField(onField.map(p => (p === oldKeeper ? newKeeper : p)));
       setOnBench(onBench.map(p => (p === newKeeper ? oldKeeper : p)));
       setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [oldKeeper], inn: [newKeeper], keeperChange: true, newKeeper }]);
     } else {
-      // Veldspeler wordt keeper: alleen rol wisselen
       setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [], inn: [], keeperChange: true, newKeeper }]);
     }
     setMatchKeeper(newKeeper);
     setShowKeeperPicker(false);
+    addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
+  };
+
+  const updateScore = (side, delta) => {
+    if (side === 'home') {
+      const newScore = Math.max(0, homeScore + delta);
+      setHomeScore(newScore);
+      if (delta > 0) addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf });
+    } else {
+      const newScore = Math.max(0, awayScore + delta);
+      setAwayScore(newScore);
+      if (delta > 0) addEvent({ type: 'goal_away', time: fmt(matchTimer), half: currentHalf });
+    }
   };
 
   return {
@@ -147,6 +262,7 @@ export function useMatchState() {
     playersOnField, setPlayersOnField, halfDuration, setHalfDuration,
     halves, setHalves, subInterval, setSubInterval,
     homeTeam, setHomeTeam, awayTeam, setAwayTeam,
+    team, setTeam,
     // Match state
     view, setView, onField, onBench, playTime, currentHalf,
     matchTimer, subTimer, isRunning, isPaused, setIsPaused,
@@ -158,6 +274,9 @@ export function useMatchState() {
     showPaste, setShowPaste, clipboardNames, setClipboardNames,
     showClipBanner, setShowClipBanner, clipDismissed, setClipDismissed,
     pasteText, setPasteText, pasteResult, setPasteResult,
+    // Multiplayer
+    matchCode, setMatchCode, isOnline, setIsOnline, syncError,
+    createOnlineMatch, updateScore,
     // Computed
     totalMatchTime,
     // Actions

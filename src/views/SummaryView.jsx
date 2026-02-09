@@ -4,10 +4,8 @@ import { fmt } from '../utils/format';
 import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
-import { VIEWS } from '../hooks/useMatchState';
-
-export default function SummaryView({ state }) {
-  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore, setView } = state;
+export default function SummaryView({ state, onNewMatch }) {
+  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore } = state;
 
   const sorted = [...players].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0));
   const max = Math.max(...Object.values(playTime), 1);
@@ -70,7 +68,7 @@ export default function SummaryView({ state }) {
             </div>
           </div>
         )}
-        <button onClick={() => setView(VIEWS.SETUP)} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, boxShadow: "0 4px 16px rgba(22,163,74,0.25)" }}>Nieuwe wedstrijd</button>
+        <button onClick={onNewMatch} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, boxShadow: "0 4px 16px rgba(22,163,74,0.25)" }}>Nieuwe wedstrijd</button>
       </div>
     </div>
   );
