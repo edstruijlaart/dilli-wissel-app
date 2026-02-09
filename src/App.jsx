@@ -48,8 +48,10 @@ export default function App() {
     window.history.pushState(null, '', '/');
   };
 
-  const handleStartOnline = () => {
+  const handleStartOnline = (teamData) => {
     state.setIsOnline(true);
+    if (teamData?.team) state.setTeam(teamData.team);
+    if (teamData?.players?.length) state.setPlayers(teamData.players);
     setMode(MODES.SETUP);
   };
 

@@ -17,10 +17,14 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
   };
 
   const handleStartOnline = () => {
-    // Check of code al eerder gevalideerd is (localStorage)
     const saved = localStorage.getItem('dilli_coach');
     if (saved) {
-      onStartOnline();
+      try {
+        const data = JSON.parse(saved);
+        onStartOnline(data);
+      } catch {
+        onStartOnline({});
+      }
       return;
     }
     setShowCoachCode(true);
@@ -40,9 +44,10 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
       });
       const data = await res.json();
       if (data.valid) {
-        localStorage.setItem('dilli_coach', '1');
+        const teamData = { team: data.team || null, players: data.players || [] };
+        localStorage.setItem('dilli_coach', JSON.stringify(teamData));
         setShowCoachCode(false);
-        onStartOnline();
+        onStartOnline(teamData);
       } else {
         setCoachError('Ongeldige code');
       }
