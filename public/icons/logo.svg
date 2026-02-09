@@ -1,0 +1,45 @@
+<svg width="512" height="512" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="98" fill="white" stroke="#222" stroke-width="3"/>
+  <circle cx="100" cy="100" r="82" fill="white" stroke="#222" stroke-width="2"/>
+  <clipPath id="dc"><circle cx="100" cy="100" r="60"/></clipPath>
+  <g clip-path="url(#dc)">
+    <rect x="40" y="40" width="120" height="120" fill="white"/>
+    <rect x="52" y="40" width="14" height="120" fill="#CC0000"/>
+    <rect x="78" y="40" width="14" height="120" fill="#CC0000"/>
+    <rect x="104" y="40" width="14" height="120" fill="#CC0000"/>
+    <rect x="130" y="40" width="14" height="120" fill="#CC0000"/>
+  </g>
+  <circle cx="100" cy="100" r="60" fill="none" stroke="#222" stroke-width="2"/>
+  <!-- Tekst boven: v.v. DILETTANT als individuele letters op boog -->
+  <g font-size="11" font-weight="700" font-family="Arial,Helvetica,sans-serif" fill="#222">
+    <text x="30" y="45" transform="rotate(-62,30,45)">v</text>
+    <text x="36" y="36" transform="rotate(-55,36,36)">.</text>
+    <text x="42" y="30" transform="rotate(-47,42,30)">v</text>
+    <text x="50" y="25" transform="rotate(-38,50,25)">.</text>
+    <text x="62" y="18" transform="rotate(-25,62,18)">D</text>
+    <text x="73" y="14" transform="rotate(-16,73,14)">I</text>
+    <text x="81" y="12" transform="rotate(-8,81,12)">L</text>
+    <text x="92" y="10" transform="rotate(0,92,10)">E</text>
+    <text x="103" y="10" transform="rotate(8,103,10)">T</text>
+    <text x="114" y="12" transform="rotate(16,114,12)">T</text>
+    <text x="124" y="15" transform="rotate(24,124,15)">A</text>
+    <text x="134" y="20" transform="rotate(32,134,20)">N</text>
+    <text x="144" y="27" transform="rotate(40,144,27)">T</text>
+  </g>
+  <!-- Tekst onder: KRIMPEN A/D LEK -->
+  <g font-size="10" font-weight="700" font-family="Arial,Helvetica,sans-serif" fill="#222">
+    <text x="28" y="168" transform="rotate(48,28,168)">K</text>
+    <text x="36" y="175" transform="rotate(40,36,175)">R</text>
+    <text x="44" y="181" transform="rotate(32,44,181)">I</text>
+    <text x="51" y="185" transform="rotate(24,51,185)">M</text>
+    <text x="62" y="189" transform="rotate(16,62,189)">P</text>
+    <text x="72" y="191" transform="rotate(8,72,191)">E</text>
+    <text x="82" y="193" transform="rotate(2,82,193)">N</text>
+    <text x="96" y="193" transform="rotate(-4,96,193)">A</text>
+    <text x="106" y="192" transform="rotate(-8,106,192)">/</text>
+    <text x="113" y="191" transform="rotate(-14,113,191)">D</text>
+    <text x="126" y="187" transform="rotate(-22,126,187)">L</text>
+    <text x="136" y="183" transform="rotate(-30,136,183)">E</text>
+    <text x="146" y="177" transform="rotate(-38,146,177)">K</text>
+  </g>
+</svg>
