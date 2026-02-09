@@ -7,9 +7,10 @@ import ShareView from './views/ShareView';
 import MatchView from './views/MatchView';
 import SummaryView from './views/SummaryView';
 import ViewerView from './views/ViewerView';
+import AdminView from './views/AdminView';
 
-// App modes: HOME → SETUP → (SHARE) → MATCH → SUMMARY  |  VIEWER
-const MODES = { HOME: 'home', SETUP: 'setup', SHARE: 'share', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer' };
+// App modes: HOME → SETUP → (SHARE) → MATCH → SUMMARY  |  VIEWER | ADMIN
+const MODES = { HOME: 'home', SETUP: 'setup', SHARE: 'share', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer', ADMIN: 'admin' };
 
 const SESSION_KEY = 'dilli_active_match';
 
@@ -25,6 +26,7 @@ function clearSession() {
 
 function getInitialRoute() {
   const path = window.location.pathname;
+  if (path === '/admin') return { mode: MODES.ADMIN, code: null };
   const joinMatch = path.match(/^\/join\/([A-Za-z0-9]{4})$/);
   if (joinMatch) return { mode: MODES.VIEWER, code: joinMatch[1].toUpperCase() };
   return { mode: MODES.HOME, code: null };
@@ -41,8 +43,9 @@ export default function App() {
   useEffect(() => {
     if (reconnectAttempted.current) return;
     reconnectAttempted.current = true;
-    // Skip als we al in viewer mode zitten (join URL)
-    if (getInitialRoute().mode === MODES.VIEWER) return;
+    // Skip als we in viewer of admin mode zitten
+    const initMode = getInitialRoute().mode;
+    if (initMode === MODES.VIEWER || initMode === MODES.ADMIN) return;
     try {
       const saved = sessionStorage.getItem(SESSION_KEY);
       if (!saved) return;
@@ -177,6 +180,9 @@ export default function App() {
       )}
       {mode === MODES.VIEWER && (
         <ViewerView code={viewerCode} onBack={goHome} />
+      )}
+      {mode === MODES.ADMIN && (
+        <AdminView onBack={goHome} />
       )}
     </>
   );
