@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, btnP, btnS, btnD, mono } from '../theme';
 import { fmt } from '../utils/format';
 import { fireConfetti } from '../utils/confetti';
@@ -20,6 +20,21 @@ export default function MatchView({ state }) {
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
+  const [viewers, setViewers] = useState(0);
+  const viewerPollRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOnline || !matchCode) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/match/${matchCode}`);
+        if (res.ok) { const d = await res.json(); setViewers(d.viewers || 0); }
+      } catch { /* ignore */ }
+    };
+    poll();
+    viewerPollRef.current = setInterval(poll, 10000);
+    return () => clearInterval(viewerPollRef.current);
+  }, [isOnline, matchCode]);
 
   const handleGoal = (side) => {
     if (side === 'home') {
@@ -53,6 +68,7 @@ export default function MatchView({ state }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
             {syncError || `Live · Code: ${matchCode}`}
+            {viewers > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4 }}>{Icons.eye(12, T.textMuted)} {viewers}</span>}
           </div>
         )}
         {/* Timer */}

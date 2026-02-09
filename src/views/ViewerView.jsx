@@ -48,9 +48,12 @@ export default function ViewerView({ code, onBack }) {
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{match.team || match.homeTeam}</div>
             <div style={{ fontSize: 11, color: T.textMuted }}>Code: {code} — {statusLabel[match.status] || match.status}</div>
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: match.isRunning && !match.isPaused ? T.accent : T.textMuted, animation: match.isRunning && !match.isPaused ? "pulse 1.5s infinite" : "none" }} />
-            <span style={{ fontSize: 11, color: T.textMuted }}>{match.isRunning && !match.isPaused ? "Live" : "Pauze"}</span>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            {match.viewers > 0 && <span style={{ fontSize: 11, color: T.textMuted, display: "flex", alignItems: "center", gap: 3 }}>{Icons.eye(12, T.textMuted)} {match.viewers}</span>}
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: match.isRunning && !match.isPaused ? T.accent : T.textMuted, animation: match.isRunning && !match.isPaused ? "pulse 1.5s infinite" : "none" }} />
+              <span style={{ fontSize: 11, color: T.textMuted }}>{match.isRunning && !match.isPaused ? "Live" : "Pauze"}</span>
+            </div>
           </div>
         </div>
 

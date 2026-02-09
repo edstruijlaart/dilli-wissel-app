@@ -11,6 +11,19 @@ export default async function handler(req, res) {
       const data = await redis.get(key);
       if (!data) return res.status(404).json({ error: 'Match not found' });
       const match = typeof data === 'string' ? JSON.parse(data) : data;
+
+      // Track viewer: gebruik IP + forwarded header als unieke ID
+      const viewersKey = `viewers:${code.toUpperCase()}`;
+      const viewerId = (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim();
+      // Voeg viewer toe aan sorted set met timestamp als score
+      const now = Date.now();
+      await redis.zadd(viewersKey, { score: now, member: viewerId });
+      // Verwijder viewers die langer dan 15 seconden niet gepolld hebben
+      await redis.zremrangebyscore(viewersKey, 0, now - 15000);
+      await redis.expire(viewersKey, 300); // cleanup na 5 min inactiviteit
+      const viewerCount = await redis.zcard(viewersKey);
+
+      match.viewers = viewerCount;
       return res.status(200).json(match);
     } catch (err) {
       console.error('Get match error:', err);
