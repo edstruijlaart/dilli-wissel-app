@@ -6,10 +6,19 @@
   <title>Dilli Wissel App</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Dilli Wissel">
   <meta name="theme-color" content="#F5F5F7">
   <meta name="description" content="Jeugdvoetbal wisselmanager voor v.v. Dilettant">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png">
+  <script>
+    // Dynamisch manifest + apple-mobile-web-app-title op basis van URL
+    if (window.location.pathname === '/admin') {
+      document.write('<link rel="manifest" href="/admin-manifest.json">');
+      document.write('<meta name="apple-mobile-web-app-title" content="Dilli Admin">');
+      document.title = 'Dilli Admin';
+    } else {
+      document.write('<meta name="apple-mobile-web-app-title" content="Dilli Wissel">');
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 </head>
