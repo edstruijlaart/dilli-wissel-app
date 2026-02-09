@@ -38,6 +38,7 @@ export function useMatchState() {
   const [awayTeam, setAwayTeam] = useState("");
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
+  const [goalScorers, setGoalScorers] = useState({}); // { "Luuk": 2, "Sem": 1 }
 
   // Multiplayer state
   const [matchCode, setMatchCode] = useState(null);
@@ -250,6 +251,7 @@ export function useMatchState() {
       setHomeScore(newScore);
       if (delta > 0) {
         notifyGoal();
+        if (scorer) setGoalScorers(prev => ({ ...prev, [scorer]: (prev[scorer] || 0) + 1 }));
         addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf, scorer: scorer || null });
       }
     } else {
@@ -335,7 +337,7 @@ export function useMatchState() {
     showSubAlert, suggestedSubs, subHistory, halfBreak,
     manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
-    homeScore, setHomeScore, awayScore, setAwayScore,
+    homeScore, setHomeScore, awayScore, setAwayScore, goalScorers,
     // Paste state
     showPaste, setShowPaste, clipboardNames, setClipboardNames,
     showClipBanner, setShowClipBanner, clipDismissed, setClipDismissed,

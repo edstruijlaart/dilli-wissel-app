@@ -13,7 +13,7 @@ export default function MatchView({ state }) {
     isRunning, isPaused, setIsPaused, showSubAlert, suggestedSubs,
     halfBreak, manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
-    homeTeam, awayTeam, homeScore, awayScore,
+    homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError,
@@ -220,6 +220,7 @@ export default function MatchView({ state }) {
                     {isK && Icons.glove(14, T.keeper)}
                     <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
                     {isK && <Badge variant="keeper">Keeper</Badge>}
+                    {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
@@ -245,7 +246,10 @@ export default function MatchView({ state }) {
                     background: manualSubMode ? "rgba(22,163,74,0.04)" : "rgba(217,119,6,0.03)",
                     border: manualSubMode ? `1px solid ${T.accentDim}` : `1px solid ${T.glassBorder}`,
                     cursor: manualSubMode ? "pointer" : "default" }}>
-                  <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
+                    {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
                     {manualSubMode && <span style={{ fontSize: 11, color: T.accent, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>{Icons.arrowUp(12)} tap</span>}
