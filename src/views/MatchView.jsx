@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { T, base, card, btnP, btnS, btnD, mono } from '../theme';
 import { fmt } from '../utils/format';
 import { fireConfetti } from '../utils/confetti';
@@ -18,6 +18,25 @@ export default function MatchView({ state }) {
     executeSubs, skipSubs, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError,
   } = state;
+
+  const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
+
+  const handleGoal = (side) => {
+    if (side === 'home') {
+      // Thuisdoelpunt: vraag wie scoorde
+      setScorerPicker('home');
+    } else {
+      // Tegendoelpunt: geen scorer nodig
+      updateScore('away', 1);
+    }
+  };
+
+  const confirmScorer = (scorer) => {
+    updateScore('home', 1, scorer);
+    fireConfetti();
+    vibrate([100, 50, 200]);
+    setScorerPicker(null);
+  };
 
   const hs = halfDuration * 60;
   const he = matchTimer - (currentHalf - 1) * hs;
@@ -74,7 +93,7 @@ export default function MatchView({ state }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <button onClick={() => updateScore('home', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{homeScore}</span>
-              <button onClick={() => { updateScore('home', 1); fireConfetti(); vibrate([100, 50, 200]); }} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => handleGoal('home')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
           <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300, padding: "0 4px" }}>–</div>
@@ -83,7 +102,7 @@ export default function MatchView({ state }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <button onClick={() => updateScore('away', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{awayScore}</span>
-              <button onClick={() => updateScore('away', 1)} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => handleGoal('away')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
         </div>
@@ -219,6 +238,38 @@ export default function MatchView({ state }) {
               ))}
             </div>
             {!manualSubMode && !showSubAlert && !halfBreak && <p style={{ fontSize: 11, color: T.textMuted, textAlign: "center", marginTop: 10, marginBottom: 0 }}>Tik op veldspeler voor handmatige wissel</p>}
+          </div>
+        )}
+
+        {/* Scorer picker */}
+        {scorerPicker && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setScorerPicker(null); }}>
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "slideIn .25s", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 32, marginBottom: 4 }}>⚽</div>
+                <h3 style={{ color: T.text, fontSize: 16, fontWeight: 700, margin: 0 }}>Wie scoorde?</h3>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
+                {onField.filter(p => p !== matchKeeper).map(p => (
+                  <button key={p} onClick={() => confirmScorer(p)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: T.glass, border: `1px solid ${T.glassBorder}`, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", color: T.text, width: "100%", textAlign: "left", transition: "all 0.15s" }}>
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{p}</span>
+                  </button>
+                ))}
+                {matchKeeper && (
+                  <button onClick={() => confirmScorer(matchKeeper)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, background: "rgba(217,119,6,0.04)", border: `1px solid ${T.keeperDim}`, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", color: T.text, width: "100%", textAlign: "left", transition: "all 0.15s" }}>
+                    {Icons.glove(14, T.keeper)}
+                    <span style={{ fontWeight: 700, fontSize: 15 }}>{matchKeeper}</span>
+                  </button>
+                )}
+              </div>
+              <button onClick={() => confirmScorer(null)}
+                style={{ ...btnS, width: "100%", padding: "12px 0", fontSize: 13 }}>
+                Weet ik niet
+              </button>
+            </div>
           </div>
         )}
       </div>

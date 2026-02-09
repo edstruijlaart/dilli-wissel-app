@@ -17,7 +17,7 @@ export default function ShareView({ code, onContinue }) {
 
   const shareWhatsApp = () => {
     const text = `Kijk mee met de wedstrijd! Open: ${joinUrl}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    window.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
   };
 
   const shareNative = async () => {

@@ -244,11 +244,11 @@ export function useMatchState() {
     addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
   };
 
-  const updateScore = (side, delta) => {
+  const updateScore = (side, delta, scorer) => {
     if (side === 'home') {
       const newScore = Math.max(0, homeScore + delta);
       setHomeScore(newScore);
-      if (delta > 0) addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf });
+      if (delta > 0) addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf, scorer: scorer || null });
     } else {
       const newScore = Math.max(0, awayScore + delta);
       setAwayScore(newScore);
