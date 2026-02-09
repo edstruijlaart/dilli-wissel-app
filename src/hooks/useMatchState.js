@@ -156,7 +156,7 @@ export function useMatchState() {
     setPlayTime(init); setCurrentHalf(1); setMatchTimer(0); setSubTimer(0);
     setIsRunning(true); setIsPaused(false); setShowSubAlert(false);
     setSubHistory([]); setHalfBreak(false); alertShownRef.current = false;
-    setHomeScore(0); setAwayScore(0);
+    setHomeScore(0); setAwayScore(0); setGoalScorers({});
     setView(VIEWS.MATCH);
     addEvent({ type: 'match_start', time: '0:00', half: 1 });
   };
