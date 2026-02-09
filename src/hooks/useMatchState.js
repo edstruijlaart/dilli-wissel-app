@@ -337,7 +337,7 @@ export function useMatchState() {
     showSubAlert, suggestedSubs, subHistory, halfBreak,
     manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
-    homeScore, setHomeScore, awayScore, setAwayScore, goalScorers,
+    homeScore, setHomeScore, awayScore, setAwayScore, goalScorers, setGoalScorers,
     // Paste state
     showPaste, setShowPaste, clipboardNames, setClipboardNames,
     showClipBanner, setShowClipBanner, clipDismissed, setClipDismissed,

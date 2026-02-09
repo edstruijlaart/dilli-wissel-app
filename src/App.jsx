@@ -139,6 +139,9 @@ export default function App() {
 
   const handleNewMatch = () => {
     state.setView(VIEWS.SETUP);
+    state.setGoalScorers({});
+    state.setHomeScore(0);
+    state.setAwayScore(0);
     setMode(MODES.HOME);
     clearSession();
     window.history.pushState(null, '', '/');
