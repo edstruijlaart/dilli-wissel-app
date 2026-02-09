@@ -9,6 +9,14 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
   const [coachCode, setCoachCode] = useState('');
   const [coachError, setCoachError] = useState('');
   const [checking, setChecking] = useState(false);
+  const [loggedInTeam, setLoggedInTeam] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('dilli_coach'))?.team || null; } catch { return null; }
+  });
+
+  const logout = () => {
+    localStorage.removeItem('dilli_coach');
+    setLoggedInTeam(null);
+  };
 
   const handleJoinInput = (e) => {
     const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
@@ -46,6 +54,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
       if (data.valid) {
         const teamData = { team: data.team || null, players: data.players || [] };
         localStorage.setItem('dilli_coach', JSON.stringify(teamData));
+        setLoggedInTeam(teamData.team);
         setShowCoachCode(false);
         onStartOnline(teamData);
       } else {
@@ -105,6 +114,14 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
           />
           <p style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Voer de 4-letter code in om mee te kijken</p>
         </div>
+
+        {/* Ingelogd als / uitloggen */}
+        {loggedInTeam && (
+          <div style={{ textAlign: "center", marginTop: 8 }}>
+            <span style={{ fontSize: 12, color: T.textMuted }}>Ingelogd als <strong style={{ color: T.text }}>{loggedInTeam}</strong></span>
+            <button onClick={logout} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 12, textDecoration: "underline", cursor: "pointer", marginLeft: 8, fontFamily: "'DM Sans',sans-serif" }}>Uitloggen</button>
+          </div>
+        )}
       </div>
 
       {/* Coach code modal */}
