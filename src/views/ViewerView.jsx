@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, mono } from '../theme';
 import { fmt } from '../utils/format';
+import { fireConfetti } from '../utils/confetti';
 import { useMatchPolling } from '../hooks/useMatchPolling';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
@@ -9,12 +10,35 @@ import Icons from '../components/Icons';
 export default function ViewerView({ code, onBack }) {
   const { match, events, error, loading, getElapsed, getSubElapsed } = useMatchPolling(code);
   const [timer, setTimer] = useState(0);
+  const [goalToast, setGoalToast] = useState(null);
+  const prevEventsLen = useRef(0);
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
   useEffect(() => {
     const iv = setInterval(() => setTimer(t => t + 1), 1000);
     return () => clearInterval(iv);
   }, []);
+
+  // Detecteer nieuwe doelpunten en schiet confetti af
+  useEffect(() => {
+    if (events.length <= prevEventsLen.current) {
+      prevEventsLen.current = events.length;
+      return;
+    }
+    // Check alleen de nieuwe events
+    const newEvents = events.slice(prevEventsLen.current);
+    prevEventsLen.current = events.length;
+
+    for (const ev of newEvents) {
+      if (ev.type === 'goal_home') {
+        fireConfetti();
+        const msg = ev.scorer ? `DOELPUNT! ${ev.scorer} scoort!` : 'DOELPUNT!';
+        setGoalToast(msg);
+        setTimeout(() => setGoalToast(null), 4000);
+        break; // 1 confetti per poll is genoeg
+      }
+    }
+  }, [events]);
 
   const elapsed = getElapsed();
   const subElapsed = getSubElapsed();
@@ -39,6 +63,20 @@ export default function ViewerView({ code, onBack }) {
 
   return (
     <div style={{ ...base, padding: "16px 16px 80px" }}>
+      {/* Goal toast */}
+      {goalToast && (
+        <div style={{
+          position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+          background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff",
+          padding: "14px 28px", borderRadius: 16, fontSize: 18, fontWeight: 800,
+          zIndex: 10000, textAlign: "center", boxShadow: "0 8px 32px rgba(22,163,74,0.4)",
+          animation: "goalIn 0.4s ease-out", fontFamily: "'DM Sans',sans-serif",
+          maxWidth: "90vw"
+        }}>
+          {goalToast}
+        </div>
+      )}
+      <style>{`@keyframes goalIn { from { opacity:0; transform:translateX(-50%) scale(0.7) translateY(-20px); } to { opacity:1; transform:translateX(-50%) scale(1) translateY(0); } }`}</style>
       <div style={{ maxWidth: 440, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
