@@ -98,6 +98,16 @@ function AdminDashboard({ adminCode, onLogout, onBack }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('matches'); // 'matches' | 'teams'
   const [deleting, setDeleting] = useState(null);
+  const [copiedCode, setCopiedCode] = useState(null);
+
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const copyMatchLink = (code) => {
+    const url = `${baseUrl}/join/${code}`;
+    navigator.clipboard?.writeText(url);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-code': adminCode };
 
@@ -221,6 +231,15 @@ function AdminDashboard({ adminCode, onLogout, onBack }) {
                   )}
                 </div>
 
+                <button
+                  onClick={() => copyMatchLink(m.code)}
+                  style={{
+                    ...btnS, padding: "6px 14px", fontSize: 12,
+                    ...(copiedCode === m.code ? { borderColor: T.accent, color: T.accent } : {}),
+                  }}
+                >
+                  {copiedCode === m.code ? '✓ Gekopieerd!' : 'Link kopiëren'}
+                </button>
                 <button
                   onClick={() => deleteMatch(m.code)}
                   disabled={deleting === m.code}
