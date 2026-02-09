@@ -330,6 +330,7 @@ function TeamsManager({ teams, setTeams, headers }) {
           onCancel={() => setShowAdd(false)}
           saving={saving}
           existingCodes={Object.keys(teams)}
+          existingTeams={teams}
         />
       )}
 
@@ -352,6 +353,7 @@ function TeamsManager({ teams, setTeams, headers }) {
               onCancel={() => setEditingCode(null)}
               saving={saving}
               isEdit
+              existingTeams={teams}
             />
           ) : (
             <div style={{ ...card, padding: 16, marginBottom: 10 }}>
@@ -400,7 +402,7 @@ function TeamsManager({ teams, setTeams, headers }) {
 
 /* ─── Team Form Component ─── */
 
-function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onSave, onCancel, saving, isEdit, existingCodes = [] }) {
+function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onSave, onCancel, saving, isEdit, existingCodes = [], existingTeams = {} }) {
   const [code, setCode] = useState(initialCode);
   const [team, setTeam] = useState(initialTeam);
   const [playerText, setPlayerText] = useState(initialPlayers.join(', '));
@@ -409,8 +411,18 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onS
   const handleSave = () => {
     if (!code.trim()) return setError('Code is verplicht');
     if (!team.trim()) return setError('Teamnaam is verplicht');
+    // Check dubbele code (alleen bij nieuw team)
     if (!isEdit && existingCodes.map(c => c.toUpperCase()).includes(code.trim().toUpperCase())) {
       return setError('Deze code bestaat al');
+    }
+    // Check dubbele teamnaam (bij nieuw team of als naam gewijzigd is bij bewerken)
+    const teamLower = team.trim().toLowerCase();
+    const duplicate = Object.entries(existingTeams).find(([k, v]) => {
+      if (isEdit && k.toUpperCase() === initialCode.toUpperCase()) return false; // eigen team overslaan
+      return (v.team || '').toLowerCase() === teamLower;
+    });
+    if (duplicate) {
+      return setError(`Teamnaam "${team.trim()}" bestaat al (code: ${duplicate[0]})`);
     }
     setError('');
     const players = playerText

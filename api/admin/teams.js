@@ -53,6 +53,18 @@ export default async function handler(req, res) {
 
       const teams = await getTeams();
       const upperCode = code.trim().toUpperCase();
+      const isNew = !teams[upperCode];
+
+      // Check dubbele teamnaam
+      const teamLower = team.trim().toLowerCase();
+      const duplicate = Object.entries(teams).find(([k, v]) => {
+        if (k.toUpperCase() === upperCode) return false; // eigen team overslaan bij bewerken
+        return (v.team || '').toLowerCase() === teamLower;
+      });
+      if (duplicate) {
+        return res.status(400).json({ error: `Teamnaam "${team.trim()}" bestaat al (code: ${duplicate[0]})` });
+      }
+
       teams[upperCode] = {
         team: team.trim(),
         players: Array.isArray(players) ? players.map(p => p.trim()).filter(Boolean) : [],
