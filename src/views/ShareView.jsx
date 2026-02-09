@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { T, base, card, btnP, btnS, mono } from '../theme';
 import DilliLogo from '../components/DilliLogo';
 import Icons from '../components/Icons';
@@ -6,13 +6,19 @@ import Icons from '../components/Icons';
 export default function ShareView({ code, onContinue }) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const joinUrl = `${baseUrl}/join/${code}`;
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const copyCode = () => {
     navigator.clipboard?.writeText(code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
   };
 
   const copyLink = () => {
     navigator.clipboard?.writeText(joinUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   const shareWhatsApp = () => {
@@ -41,12 +47,17 @@ export default function ShareView({ code, onContinue }) {
           <button onClick={copyCode} style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.accent, letterSpacing: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
             {code}
           </button>
-          <p style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Tik om te kopiëren</p>
+          <p style={{ fontSize: 11, color: codeCopied ? T.accent : T.textMuted, marginTop: 6, fontWeight: codeCopied ? 700 : 400, transition: "all 0.2s" }}>
+            {codeCopied ? '✓ Gekopieerd!' : 'Tik om te kopiëren'}
+          </p>
         </div>
 
         {/* Link kopiëren */}
-        <button onClick={copyLink} style={{ ...btnS, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", fontSize: 13 }}>
-          Link kopiëren
+        <button onClick={copyLink} style={{
+          ...btnS, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", fontSize: 13,
+          ...(linkCopied ? { borderColor: T.accent, color: T.accent } : {})
+        }}>
+          {linkCopied ? '✓ Link gekopieerd!' : 'Link kopiëren'}
         </button>
 
         {/* WhatsApp delen */}
