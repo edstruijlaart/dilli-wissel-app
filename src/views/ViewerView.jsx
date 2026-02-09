@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, mono } from '../theme';
 import { fmt } from '../utils/format';
 import { fireConfetti } from '../utils/confetti';
+import { notifyGoal } from '../utils/audio';
 import { useMatchPolling } from '../hooks/useMatchPolling';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
@@ -11,6 +12,7 @@ export default function ViewerView({ code, onBack }) {
   const { match, events, error, loading, getElapsed, getSubElapsed } = useMatchPolling(code);
   const [timer, setTimer] = useState(0);
   const [goalToast, setGoalToast] = useState(null);
+  const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
   const prevEventsLen = useRef(0);
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
@@ -32,10 +34,19 @@ export default function ViewerView({ code, onBack }) {
     for (const ev of newEvents) {
       if (ev.type === 'goal_home') {
         fireConfetti();
+        notifyGoal();
+        setGoalType('home');
         const msg = ev.scorer ? `DOELPUNT! ${ev.scorer} scoort!` : 'DOELPUNT!';
         setGoalToast(msg);
         setTimeout(() => setGoalToast(null), 4000);
-        break; // 1 confetti per poll is genoeg
+        break;
+      }
+      if (ev.type === 'goal_away') {
+        fireConfetti('sad');
+        setGoalType('away');
+        setGoalToast('Tegendoelpunt...');
+        setTimeout(() => setGoalToast(null), 4000);
+        break;
       }
     }
   }, [events]);
@@ -72,9 +83,15 @@ export default function ViewerView({ code, onBack }) {
       {goalToast && (
         <div style={{
           position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-          background: "linear-gradient(135deg, #16A34A, #22C55E)", color: "#fff",
+          background: goalType === 'home'
+            ? "linear-gradient(135deg, #16A34A, #22C55E)"
+            : "linear-gradient(135deg, #6B7280, #9CA3AF)",
+          color: "#fff",
           padding: "14px 28px", borderRadius: 16, fontSize: 18, fontWeight: 800,
-          zIndex: 10000, textAlign: "center", boxShadow: "0 8px 32px rgba(22,163,74,0.4)",
+          zIndex: 10000, textAlign: "center",
+          boxShadow: goalType === 'home'
+            ? "0 8px 32px rgba(22,163,74,0.4)"
+            : "0 8px 32px rgba(107,114,128,0.4)",
           animation: "goalIn 0.4s ease-out", fontFamily: "'DM Sans',sans-serif",
           maxWidth: "90vw"
         }}>

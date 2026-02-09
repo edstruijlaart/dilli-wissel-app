@@ -1,9 +1,52 @@
-export const fireConfetti = () => {
+export const fireConfetti = (mode = 'happy') => {
   const canvas = document.createElement("canvas");
   canvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999";
   canvas.width = window.innerWidth; canvas.height = window.innerHeight;
   document.body.appendChild(canvas);
   const ctx = canvas.getContext("2d");
+
+  if (mode === 'sad') {
+    // Trieste emoji's die naar beneden vallen
+    const emojis = ['😢', '😭', '😞', '😔', '💔', '😿'];
+    const pieces = Array.from({length: 30}, () => ({
+      x: Math.random() * canvas.width,
+      y: -20 - Math.random() * 100,
+      vy: 1.5 + Math.random() * 2.5,
+      vx: (Math.random() - 0.5) * 1.5,
+      size: 20 + Math.random() * 16,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+      rot: (Math.random() - 0.5) * 0.3,
+      rotV: (Math.random() - 0.5) * 2,
+      opacity: 1
+    }));
+    let frame = 0;
+    const animate = () => {
+      frame++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let alive = false;
+      pieces.forEach(p => {
+        p.x += p.vx; p.y += p.vy;
+        p.rot += p.rotV;
+        if (frame > 60) p.opacity = Math.max(0, p.opacity - 0.025);
+        if (p.opacity <= 0 || p.y > canvas.height + 50) return;
+        alive = true;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot * Math.PI / 180);
+        ctx.globalAlpha = p.opacity;
+        ctx.font = `${p.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(p.emoji, 0, 0);
+        ctx.restore();
+      });
+      if (alive && frame < 150) requestAnimationFrame(animate);
+      else canvas.remove();
+    };
+    requestAnimationFrame(animate);
+    return;
+  }
+
+  // Happy confetti (bestaand)
   const colors = ["#16A34A","#22C55E","#FCD34D","#F97316","#EF4444","#3B82F6","#A855F7","#EC4899","#FFFFFF"];
   const pieces = Array.from({length: 120}, () => ({
     x: canvas.width * 0.5 + (Math.random() - 0.5) * 100,

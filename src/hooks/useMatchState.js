@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { playWhistle, notifySub, notifyHalf, notifyEnd } from '../utils/audio';
+import { playWhistle, notifySub, notifyHalf, notifyEnd, notifyGoal } from '../utils/audio';
 import { fmt } from '../utils/format';
 
 export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
@@ -248,7 +248,10 @@ export function useMatchState() {
     if (side === 'home') {
       const newScore = Math.max(0, homeScore + delta);
       setHomeScore(newScore);
-      if (delta > 0) addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf, scorer: scorer || null });
+      if (delta > 0) {
+        notifyGoal();
+        addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf, scorer: scorer || null });
+      }
     } else {
       const newScore = Math.max(0, awayScore + delta);
       setAwayScore(newScore);
