@@ -101,27 +101,34 @@ function AdminDashboard({ adminCode, onLogout, onBack }) {
 
   const headers = { 'Content-Type': 'application/json', 'x-admin-code': adminCode };
 
-  const loadData = useCallback(async () => {
+  const loadTeams = useCallback(async () => {
     try {
-      const [mRes, tRes] = await Promise.all([
-        fetch('/api/admin/matches', { headers }),
-        fetch('/api/admin/teams', { headers }),
-      ]);
-      const mData = await mRes.json();
-      const tData = await tRes.json();
-      setMatches(mData.matches || []);
-      setTeams(tData.teams || {});
+      const res = await fetch('/api/admin/teams', { headers });
+      const data = await res.json();
+      setTeams(data.teams || {});
     } catch { /* ignore */ }
-    setLoading(false);
   }, [adminCode]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const loadMatches = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch('/api/admin/matches', { headers, signal: controller.signal });
+      clearTimeout(timeout);
+      const data = await res.json();
+      setMatches(data.matches || []);
+    } catch { /* timeout or error, keep existing data */ }
+  }, [adminCode]);
 
-  // Auto-refresh elke 15 seconden
   useEffect(() => {
-    const iv = setInterval(loadData, 15000);
+    Promise.allSettled([loadTeams(), loadMatches()]).then(() => setLoading(false));
+  }, [loadTeams, loadMatches]);
+
+  // Auto-refresh matches elke 15 seconden
+  useEffect(() => {
+    const iv = setInterval(loadMatches, 15000);
     return () => clearInterval(iv);
-  }, [loadData]);
+  }, [loadMatches]);
 
   const deleteMatch = async (code) => {
     setDeleting(code);

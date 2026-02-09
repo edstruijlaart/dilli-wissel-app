@@ -12,31 +12,35 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      // Scan alle match keys in Redis
+      // Upstash scan: retourneert [cursor, keys]
       const keys = [];
       let cursor = 0;
       do {
-        const result = await redis.scan(cursor, { match: 'match:*', count: 100 });
-        cursor = result[0];
-        // Filter events keys eruit
-        const matchKeys = result[1].filter(k => !k.includes(':events'));
+        const [nextCursor, results] = await redis.scan(cursor, { match: 'match:*', count: 100 });
+        cursor = nextCursor;
+        const matchKeys = results.filter(k => !k.includes(':events'));
         keys.push(...matchKeys);
-      } while (cursor !== 0);
+      } while (cursor && cursor !== 0 && cursor !== '0');
 
       // Haal alle matches op
       const matches = [];
       for (const key of keys) {
-        const data = await redis.get(key);
-        if (data) {
-          const match = typeof data === 'string' ? JSON.parse(data) : data;
-          // Haal viewer count op
-          const code = key.replace('match:', '');
-          const viewersKey = `viewers:${code}`;
-          const now = Date.now();
-          await redis.zremrangebyscore(viewersKey, 0, now - 15000);
-          const viewers = await redis.zcard(viewersKey);
-          matches.push({ ...match, code, viewers });
-        }
+        try {
+          const data = await redis.get(key);
+          if (data) {
+            const match = typeof data === 'string' ? JSON.parse(data) : data;
+            const code = key.replace('match:', '');
+            // Viewer count
+            const viewersKey = `viewers:${code}`;
+            const now = Date.now();
+            try {
+              await redis.zremrangebyscore(viewersKey, 0, now - 15000);
+              const viewers = await redis.zcard(viewersKey);
+              match.viewers = viewers;
+            } catch { match.viewers = 0; }
+            matches.push({ ...match, code });
+          }
+        } catch { /* skip broken entries */ }
       }
 
       // Sorteer: actieve wedstrijden eerst, dan op createdAt desc
@@ -51,7 +55,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ matches });
     } catch (err) {
       console.error('Admin matches error:', err);
-      return res.status(500).json({ error: 'Failed to get matches' });
+      return res.status(500).json({ error: 'Failed to get matches', detail: err.message });
     }
   }
 
