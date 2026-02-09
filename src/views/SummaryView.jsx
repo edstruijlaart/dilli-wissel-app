@@ -78,6 +78,45 @@ export default function SummaryView({ state, onNewMatch }) {
             </div>
           </div>
         )}
+        {goalEvents.length > 0 && (
+          <div style={{ ...card, padding: 20, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 18 }}>⚽</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>Doelpunten</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {goalEvents.map((g, i) => (
+                <div key={i} style={{ padding: "10px 12px", borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ ...mono, fontSize: 12, color: T.textMuted, minWidth: 36 }}>{g.time}</span>
+                  <span style={{ fontSize: 11, color: T.textMuted }}>H{g.half}</span>
+                  {g.type === 'goal_home' ? (
+                    <span style={{ fontWeight: 600, color: T.accent }}>{g.scorer || (homeTeam || 'Thuis')}</span>
+                  ) : (
+                    <span style={{ fontWeight: 600, color: T.danger }}>{awayTeam || 'Uit'}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            {(() => {
+              const homeGoals = goalEvents.filter(g => g.type === 'goal_home' && g.scorer);
+              if (homeGoals.length < 2) return null;
+              const counts = {};
+              homeGoals.forEach(g => { counts[g.scorer] = (counts[g.scorer] || 0) + 1; });
+              const topScorers = Object.entries(counts).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]);
+              if (topScorers.length === 0) return null;
+              return (
+                <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: `${T.accent}15`, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <span>🌟</span>
+                  {topScorers.map(([name, count], i) => (
+                    <span key={name} style={{ fontWeight: 700, color: T.accent }}>
+                      {i > 0 && ', '}{name} ({count}x)
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
         <button onClick={() => shareCoachResult({ homeTeam, awayTeam, homeScore, awayScore }, goalEvents)} style={{
           width: "100%", padding: "14px 24px", marginBottom: 10,
           background: "linear-gradient(135deg, #25D366, #128C7E)",
