@@ -1,18 +1,27 @@
 // Team config per coachcode
-// Env var COACH_TEAMS format: JSON object {"007":{"team":"JO8-2","players":[...]},"006":{...}}
-// Falls back to simple COACH_CODES (comma-separated) if COACH_TEAMS not set
+// Leest eerst uit Redis (coach_teams key), fallback naar COACH_TEAMS env var
+import { redis } from '../_lib/redis.js';
 
-function getTeams() {
+const TEAMS_KEY = 'coach_teams';
+
+async function getTeams() {
+  // Probeer Redis eerst
+  try {
+    const teams = await redis.get(TEAMS_KEY);
+    if (teams) {
+      return typeof teams === 'string' ? JSON.parse(teams) : teams;
+    }
+  } catch { /* Redis fout, probeer env var */ }
+
+  // Fallback: COACH_TEAMS env var
   const teamsEnv = process.env.COACH_TEAMS;
   if (teamsEnv) {
-    try {
-      return JSON.parse(teamsEnv);
-    } catch { /* ignore parse errors */ }
+    try { return JSON.parse(teamsEnv); } catch { /* ignore */ }
   }
   return null;
 }
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).json({});
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -20,7 +29,7 @@ export default function handler(req, res) {
   if (!code) return res.status(400).json({ error: 'Code is required' });
 
   const input = code.trim().toUpperCase();
-  const teams = getTeams();
+  const teams = await getTeams();
 
   if (teams) {
     // Lookup by code (case-insensitive keys)

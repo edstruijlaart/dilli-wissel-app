@@ -235,47 +235,269 @@ function AdminDashboard({ adminCode, onLogout, onBack }) {
 
         {/* Teams tab */}
         {!loading && tab === 'teams' && (
-          <div>
-            {Object.keys(teams).length === 0 && (
-              <div style={{ ...card, padding: 24, textAlign: "center" }}>
-                <p style={{ fontSize: 14, color: T.textMuted }}>Geen teams geconfigureerd</p>
-                <p style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>Stel COACH_TEAMS in via Vercel env vars</p>
-              </div>
-            )}
-            {Object.entries(teams).map(([code, config]) => (
-              <div key={code} style={{ ...card, padding: 16, marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                  <span style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: 2 }}>{code}</span>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{config.team || 'Onbekend'}</span>
-                </div>
-                {config.players && config.players.length > 0 ? (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {config.players.map(p => (
-                      <span key={p} style={{
-                        fontSize: 12, fontWeight: 600, color: T.textDim,
-                        background: T.glass, padding: "4px 10px", borderRadius: 8,
-                        border: `1px solid ${T.glassBorder}`,
-                      }}>{p}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12, color: T.textMuted }}>Geen spelers ingesteld</p>
-                )}
-              </div>
-            ))}
+          <TeamsManager teams={teams} setTeams={setTeams} headers={headers} />
+        )}
+      </div>
+    </div>
+  );
+}
 
-            <div style={{ ...card, padding: 16, marginTop: 16, background: "rgba(0,0,0,0.02)" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Teams wijzigen</div>
-              <p style={{ fontSize: 13, color: T.textDim, lineHeight: 1.5 }}>
-                Teams worden beheerd via de <strong>COACH_TEAMS</strong> env var in Vercel.
-                Ga naar het Vercel dashboard om teams toe te voegen of te wijzigen.
-              </p>
-              <p style={{ fontSize: 12, color: T.textMuted, marginTop: 8, ...mono }}>
-                Format: {`{"code":{"team":"Naam","players":["..."]}}`}
-              </p>
+/* ─── Teams Manager Component ─── */
+
+function TeamsManager({ teams, setTeams, headers }) {
+  const [editingCode, setEditingCode] = useState(null); // code van team dat we bewerken
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingCode, setDeletingCode] = useState(null);
+  const [feedback, setFeedback] = useState('');
+
+  const showFeedback = (msg) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(''), 2500);
+  };
+
+  const saveTeam = async (code, team, players) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/teams', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ code, team, players }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTeams(data.teams);
+        setEditingCode(null);
+        setShowAdd(false);
+        showFeedback('Team opgeslagen!');
+      } else {
+        showFeedback(data.error || 'Fout bij opslaan');
+      }
+    } catch {
+      showFeedback('Fout bij opslaan');
+    }
+    setSaving(false);
+  };
+
+  const deleteTeam = async (code) => {
+    setDeletingCode(code);
+    try {
+      const res = await fetch('/api/admin/teams', {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setTeams(data.teams);
+        showFeedback('Team verwijderd');
+      } else {
+        showFeedback(data.error || 'Fout bij verwijderen');
+      }
+    } catch {
+      showFeedback('Fout bij verwijderen');
+    }
+    setDeletingCode(null);
+  };
+
+  const entries = Object.entries(teams);
+
+  return (
+    <div>
+      {/* Feedback toast */}
+      {feedback && (
+        <div style={{
+          position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+          background: T.accent, color: "#fff", padding: "10px 20px", borderRadius: 12,
+          fontSize: 14, fontWeight: 700, zIndex: 999, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          fontFamily: "'DM Sans',sans-serif",
+        }}>
+          {feedback}
+        </div>
+      )}
+
+      {/* Team toevoegen knop */}
+      {!showAdd && !editingCode && (
+        <button onClick={() => setShowAdd(true)} style={{ ...btnP, width: "100%", padding: "12px 0", marginBottom: 16, fontSize: 14 }}>
+          + Nieuw team
+        </button>
+      )}
+
+      {/* Nieuw team formulier */}
+      {showAdd && (
+        <TeamForm
+          onSave={saveTeam}
+          onCancel={() => setShowAdd(false)}
+          saving={saving}
+          existingCodes={Object.keys(teams)}
+        />
+      )}
+
+      {/* Bestaande teams */}
+      {entries.length === 0 && !showAdd && (
+        <div style={{ ...card, padding: 24, textAlign: "center" }}>
+          <p style={{ fontSize: 14, color: T.textMuted }}>Geen teams geconfigureerd</p>
+          <p style={{ fontSize: 12, color: T.textMuted, marginTop: 6 }}>Voeg een team toe met de knop hierboven</p>
+        </div>
+      )}
+
+      {entries.map(([code, config]) => (
+        <div key={code}>
+          {editingCode === code ? (
+            <TeamForm
+              initialCode={code}
+              initialTeam={config.team}
+              initialPlayers={config.players}
+              onSave={saveTeam}
+              onCancel={() => setEditingCode(null)}
+              saving={saving}
+              isEdit
+            />
+          ) : (
+            <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <span style={{ ...mono, fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: 2 }}>{code}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{config.team || 'Onbekend'}</span>
+                <span style={{ fontSize: 11, color: T.textMuted, marginLeft: "auto" }}>
+                  {config.players?.length || 0} spelers
+                </span>
+              </div>
+
+              {config.players && config.players.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                  {config.players.map(p => (
+                    <span key={p} style={{
+                      fontSize: 12, fontWeight: 600, color: T.textDim,
+                      background: T.glass, padding: "4px 10px", borderRadius: 8,
+                      border: `1px solid ${T.glassBorder}`,
+                    }}>{p}</span>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => setEditingCode(code)}
+                  style={{ ...btnS, padding: "6px 14px", fontSize: 12 }}
+                >
+                  Bewerken
+                </button>
+                <button
+                  onClick={() => deleteTeam(code)}
+                  disabled={deletingCode === code}
+                  style={{ ...btnD, padding: "6px 14px", fontSize: 12 }}
+                >
+                  {deletingCode === code ? 'Verwijderen...' : 'Verwijderen'}
+                </button>
+              </div>
             </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Team Form Component ─── */
+
+function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onSave, onCancel, saving, isEdit, existingCodes = [] }) {
+  const [code, setCode] = useState(initialCode);
+  const [team, setTeam] = useState(initialTeam);
+  const [playerText, setPlayerText] = useState(initialPlayers.join(', '));
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    if (!code.trim()) return setError('Code is verplicht');
+    if (!team.trim()) return setError('Teamnaam is verplicht');
+    if (!isEdit && existingCodes.map(c => c.toUpperCase()).includes(code.trim().toUpperCase())) {
+      return setError('Deze code bestaat al');
+    }
+    setError('');
+    const players = playerText
+      .split(/[,\n]/)
+      .map(p => p.trim())
+      .filter(Boolean);
+    onSave(code.trim().toUpperCase(), team.trim(), players);
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "10px 12px", borderRadius: 10,
+    border: `1px solid ${T.glassBorder}`, fontSize: 14,
+    fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 12 }}>
+        {isEdit ? `Team ${initialCode} bewerken` : 'Nieuw team toevoegen'}
+      </div>
+
+      {/* Coach code */}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
+          Coach code
+        </label>
+        <input
+          type="text"
+          value={code}
+          onChange={e => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+          placeholder="bijv. 007"
+          disabled={isEdit}
+          style={{
+            ...inputStyle,
+            ...mono,
+            letterSpacing: 3,
+            textAlign: "center",
+            marginTop: 4,
+            ...(isEdit ? { background: "#f0f0f0", color: T.textMuted } : {}),
+          }}
+          autoFocus={!isEdit}
+        />
+      </div>
+
+      {/* Teamnaam */}
+      <div style={{ marginBottom: 10 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
+          Teamnaam
+        </label>
+        <input
+          type="text"
+          value={team}
+          onChange={e => setTeam(e.target.value)}
+          placeholder="bijv. JO8-2"
+          style={{ ...inputStyle, marginTop: 4 }}
+          autoFocus={isEdit}
+        />
+      </div>
+
+      {/* Spelers */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
+          Spelers <span style={{ fontWeight: 400, textTransform: "none" }}>(komma of nieuwe regel gescheiden)</span>
+        </label>
+        <textarea
+          value={playerText}
+          onChange={e => setPlayerText(e.target.value)}
+          placeholder="Bobby, Dora, Luuk, Mees..."
+          rows={3}
+          style={{ ...inputStyle, marginTop: 4, resize: "vertical", minHeight: 60 }}
+        />
+        {playerText.trim() && (
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+            {playerText.split(/[,\n]/).map(p => p.trim()).filter(Boolean).length} spelers
           </div>
         )}
+      </div>
+
+      {error && <p style={{ fontSize: 12, color: T.danger, marginBottom: 8 }}>{error}</p>}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={handleSave} disabled={saving} style={{ ...btnP, padding: "10px 20px", fontSize: 13, flex: 1 }}>
+          {saving ? 'Opslaan...' : 'Opslaan'}
+        </button>
+        <button onClick={onCancel} style={{ ...btnS, padding: "10px 20px", fontSize: 13 }}>
+          Annuleren
+        </button>
       </div>
     </div>
   );
