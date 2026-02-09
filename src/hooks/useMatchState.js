@@ -256,6 +256,69 @@ export function useMatchState() {
     }
   };
 
+  // --- Reconnect: herstel state vanuit server na page refresh ---
+  const reconnectToMatch = useCallback(async (code) => {
+    try {
+      const res = await fetch(`/api/match/${code}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+
+      // Herstel alle match state
+      setMatchCode(code);
+      setIsOnline(true);
+      setTeam(data.team || '');
+      setHomeTeam(data.homeTeam || 'Dilettant');
+      setAwayTeam(data.awayTeam || '');
+      setPlayers(data.players || []);
+      setMatchKeeper(data.matchKeeper || data.keeper || null);
+      setKeeper(data.matchKeeper || data.keeper || null);
+      setPlayersOnField(data.playersOnField || 5);
+      setHalfDuration(data.halfDuration || 20);
+      setHalves(data.halves || 2);
+      setSubInterval(data.subInterval || 5);
+      setOnField(data.onField || []);
+      setOnBench(data.onBench || []);
+      setHomeScore(data.homeScore || 0);
+      setAwayScore(data.awayScore || 0);
+      setCurrentHalf(data.currentHalf || 1);
+      setPlayTime(data.playTime || {});
+      setHalfBreak(data.halfBreak || false);
+
+      // Timer herstel
+      if (data.timerStartedAt && data.isRunning && !data.isPaused && !data.halfBreak) {
+        // Wedstrijd loopt: bereken verstreken tijd
+        const elapsed = Math.floor((Date.now() - new Date(data.timerStartedAt).getTime()) / 1000);
+        setMatchTimer(elapsed);
+        const subElapsed = data.subTimerStartedAt
+          ? Math.floor((Date.now() - new Date(data.subTimerStartedAt).getTime()) / 1000)
+          : 0;
+        setSubTimer(subElapsed);
+        setIsRunning(true);
+        setIsPaused(false);
+      } else {
+        // Gepauzeerd of gestopt
+        setMatchTimer(data.elapsedAtPause || 0);
+        setSubTimer(data.subElapsedAtPause || 0);
+        setIsRunning(data.isRunning || false);
+        setIsPaused(data.isPaused || false);
+      }
+
+      // Status → view
+      if (data.status === 'ended') {
+        setView(VIEWS.SUMMARY);
+        setIsRunning(false);
+      } else {
+        setView(VIEWS.MATCH);
+      }
+
+      alertShownRef.current = false;
+      return true;
+    } catch (err) {
+      console.error('Reconnect error:', err);
+      return false;
+    }
+  }, []);
+
   return {
     // Setup state
     players, setPlayers, keeper, setKeeper, newPlayer, setNewPlayer,
@@ -276,7 +339,7 @@ export function useMatchState() {
     pasteText, setPasteText, pasteResult, setPasteResult,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
-    createOnlineMatch, updateScore,
+    createOnlineMatch, updateScore, reconnectToMatch,
     // Computed
     totalMatchTime,
     // Actions

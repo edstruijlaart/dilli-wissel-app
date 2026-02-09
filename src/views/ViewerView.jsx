@@ -61,6 +61,11 @@ export default function ViewerView({ code, onBack }) {
 
   const statusLabel = { setup: 'Wordt opgesteld', live: 'Live', paused: 'Gepauzeerd', halftime: 'Rust', ended: 'Afgelopen' };
 
+  // Wedstrijd afgelopen: toon samenvatting
+  if (match.status === 'ended') {
+    return <MatchSummary match={match} events={events} code={code} onBack={onBack} />;
+  }
+
   return (
     <div style={{ ...base, padding: "16px 16px 80px" }}>
       {/* Goal toast */}
@@ -173,6 +178,172 @@ export default function ViewerView({ code, onBack }) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function MatchSummary({ match, events, code, onBack }) {
+  const allGoals = events.filter(ev => ev.type === 'goal_home' || ev.type === 'goal_away');
+  const halves = match.halves || 2;
+
+  // Groepeer goals per helft
+  const goalsByHalf = {};
+  for (let h = 1; h <= halves; h++) goalsByHalf[h] = [];
+  allGoals.forEach(g => {
+    const h = g.half || 1;
+    if (!goalsByHalf[h]) goalsByHalf[h] = [];
+    goalsByHalf[h].push(g);
+  });
+
+  // Hattrick detectie: 3+ goals van dezelfde speler in dezelfde helft
+  const hattricks = [];
+  for (let h = 1; h <= halves; h++) {
+    const scorerCount = {};
+    goalsByHalf[h].filter(g => g.type === 'goal_home' && g.scorer).forEach(g => {
+      scorerCount[g.scorer] = (scorerCount[g.scorer] || 0) + 1;
+    });
+    Object.entries(scorerCount).forEach(([name, count]) => {
+      if (count >= 3) hattricks.push({ name, count, half: h });
+    });
+  }
+
+  // Resultaat bepalen
+  const won = match.homeScore > match.awayScore;
+  const draw = match.homeScore === match.awayScore;
+  const resultText = won ? 'Gewonnen!' : draw ? 'Gelijkspel' : 'Verloren';
+  const resultColor = won ? T.accent : draw ? T.warn : T.danger;
+
+  // Topscorer
+  const scorerTotals = {};
+  allGoals.filter(g => g.type === 'goal_home' && g.scorer).forEach(g => {
+    scorerTotals[g.scorer] = (scorerTotals[g.scorer] || 0) + 1;
+  });
+  const topScorer = Object.entries(scorerTotals).sort((a, b) => b[1] - a[1])[0];
+
+  return (
+    <div style={{ ...base, padding: "16px 16px 80px" }}>
+      <style>{`
+        @keyframes summaryIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes scaleIn { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }
+        .sum-row { animation: summaryIn 0.5s ease-out both; }
+      `}</style>
+      <div style={{ maxWidth: 440, margin: "0 auto" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", padding: 4 }}>{Icons.x(18, T.textMuted)}</button>
+          <DilliLogo size={36} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{match.team || match.homeTeam}</div>
+            <div style={{ fontSize: 11, color: T.textMuted }}>Wedstrijd afgelopen</div>
+          </div>
+        </div>
+
+        {/* Resultaat */}
+        <div style={{ ...card, padding: "28px 20px", marginBottom: 14, textAlign: "center", animation: "scaleIn 0.6s ease-out" }}>
+          {Icons.whistle(36, resultColor)}
+          <div style={{ fontSize: 22, fontWeight: 800, color: resultColor, marginTop: 8 }}>{resultText}</div>
+        </div>
+
+        {/* Eindstand */}
+        <div style={{ ...card, padding: "20px 24px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 20, animation: "summaryIn 0.5s ease-out 0.1s both" }}>
+          <div style={{ textAlign: "center", flex: 1 }}>
+            <div style={{ fontSize: 13, color: T.textDim, fontWeight: 600, marginBottom: 6 }}>{match.homeTeam || 'Thuis'}</div>
+            <div style={{ ...mono, fontSize: 52, fontWeight: 800, color: T.text, lineHeight: 1 }}>{match.homeScore}</div>
+          </div>
+          <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300 }}>—</div>
+          <div style={{ textAlign: "center", flex: 1 }}>
+            <div style={{ fontSize: 13, color: T.textDim, fontWeight: 600, marginBottom: 6 }}>{match.awayTeam || 'Uit'}</div>
+            <div style={{ ...mono, fontSize: 52, fontWeight: 800, color: T.text, lineHeight: 1 }}>{match.awayScore}</div>
+          </div>
+        </div>
+
+        {/* Hattrick alert */}
+        {hattricks.map((ht, i) => (
+          <div key={i} style={{
+            ...card, padding: "14px 20px", marginBottom: 14, textAlign: "center",
+            background: "linear-gradient(135deg, rgba(168,85,247,0.06), rgba(236,72,153,0.06))",
+            borderColor: "rgba(168,85,247,0.2)",
+            animation: `scaleIn 0.6s ease-out ${0.3 + i * 0.1}s both`
+          }}>
+            <div style={{ fontSize: 28, marginBottom: 4 }}>🎩</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#A855F7" }}>HATTRICK!</div>
+            <div style={{ fontSize: 14, color: T.textDim, marginTop: 2 }}>
+              {ht.name} scoorde {ht.count}x in helft {ht.half}
+            </div>
+          </div>
+        ))}
+
+        {/* Doelpunten per helft */}
+        {allGoals.length > 0 && (
+          <div style={{ ...card, padding: 16, marginBottom: 14, animation: "summaryIn 0.5s ease-out 0.2s both" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Doelpunten</div>
+            {Array.from({ length: halves }, (_, i) => i + 1).map(h => {
+              const hGoals = goalsByHalf[h] || [];
+              if (hGoals.length === 0) return null;
+              return (
+                <div key={h} style={{ marginBottom: h < halves ? 14 : 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${T.glassBorder}` }}>
+                    Helft {h}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {hGoals.map((g, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+                        <span style={{ ...mono, fontSize: 12, color: T.textMuted, minWidth: 42 }}>{g.time || ''}</span>
+                        {g.type === 'goal_home' ? (
+                          <>
+                            <span style={{ fontSize: 16 }}>⚽</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+                              {g.scorer || 'Doelpunt'}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: 16, opacity: 0.5 }}>⚽</span>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: T.textDim }}>Tegendoelpunt</span>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {allGoals.length === 0 && (
+              <div style={{ fontSize: 13, color: T.textMuted, textAlign: "center", padding: 10 }}>Geen doelpunten</div>
+            )}
+          </div>
+        )}
+
+        {/* Topscorer */}
+        {topScorer && topScorer[1] >= 2 && (
+          <div style={{ ...card, padding: "14px 20px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, animation: "summaryIn 0.5s ease-out 0.3s both" }}>
+            <span style={{ fontSize: 24 }}>⭐</span>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Topscorer</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{topScorer[0]} ({topScorer[1]}x)</div>
+            </div>
+          </div>
+        )}
+
+        {/* 0-0 */}
+        {allGoals.length === 0 && (
+          <div style={{ ...card, padding: 20, marginBottom: 14, textAlign: "center", animation: "summaryIn 0.5s ease-out 0.2s both" }}>
+            <div style={{ fontSize: 13, color: T.textMuted }}>Geen doelpunten deze wedstrijd</div>
+          </div>
+        )}
+
+        {/* Terug knop */}
+        <button onClick={onBack} style={{
+          width: "100%", padding: "14px 24px", background: T.glass,
+          border: `1px solid ${T.glassBorder}`, borderRadius: 14,
+          fontWeight: 600, fontSize: 15, cursor: "pointer",
+          fontFamily: "'DM Sans',sans-serif", color: T.textDim,
+          animation: "summaryIn 0.5s ease-out 0.4s both"
+        }}>
+          Terug naar start
+        </button>
       </div>
     </div>
   );
