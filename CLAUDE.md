@@ -141,19 +141,23 @@ Draait straks op Vercel (zelfde account als edstruijlaart.nl, apart project).
 
 ## Release Checklist
 
-Bij elke nieuwe versie:
+**BELANGRIJK:** Bij elke deploy ALTIJD versie updaten!
 
-### 1. Versie updaten
+### 1. Versie updaten (VERPLICHT bij elke deploy)
+
+**Bepaal versie type:**
+- **Patch (+0.0.1)**: Bug fixes, kleine UI tweaks, verwijderen ongebruikte code
+- **Minor (+0.1.0)**: Nieuwe features (bijv. live audio, foto's, notificaties)
+- **Major (+1.0.0)**: Breaking changes (bijv. nieuwe architectuur, verwijderde features)
+
+**Update beide bestanden:**
 ```bash
-# Update beide bestanden:
-# - src/version.js → export const VERSION = '3.x.x'
-# - package.json → "version": "3.x.x"
-```
+# src/version.js
+export const VERSION = '3.x.x';
 
-**Versie nummering:**
-- **Patch (3.2.1)**: Bug fixes, kleine UI tweaks
-- **Minor (3.3.0)**: Nieuwe features (bijv. live audio, foto's)
-- **Major (4.0.0)**: Breaking changes (bijv. nieuwe architectuur)
+# package.json
+"version": "3.x.x"
+```
 
 ### 2. Commit + Deploy
 ```bash
