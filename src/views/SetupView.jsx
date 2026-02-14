@@ -69,10 +69,10 @@ export default function SetupView({ state, onStartMatch }) {
 
         <div style={{ ...card, padding: 20, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: T.textDim, marginBottom: 16, textTransform: "uppercase", letterSpacing: 1 }}>Wedstrijd</div>
-          {isOnline && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Team</div>
-              <input type="text" value={team} onChange={e => setTeam(e.target.value)} placeholder="Bijv. JO8-2" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
+          {isOnline && team && (
+            <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 10, background: `${T.accent}15`, border: `1px solid ${T.accent}30` }}>
+              <div style={{ fontSize: 11, color: T.accent, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>Jouw team</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{team}</div>
             </div>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
@@ -81,15 +81,9 @@ export default function SetupView({ state, onStartMatch }) {
             <Stepper label="Min / helft" value={halfDuration} set={setHalfDuration} min={5} step={5} />
             <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />
           </div>
-          <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Thuis</div>
-              <input type="text" value={homeTeam} onChange={e => setHomeTeam(e.target.value)} placeholder="Thuisploeg" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Uit</div>
-              <input type="text" value={awayTeam} onChange={e => setAwayTeam(e.target.value)} placeholder="Tegenstander" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
-            </div>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Tegenstander</div>
+            <input type="text" value={awayTeam} onChange={e => setAwayTeam(e.target.value)} placeholder="Tegenstander" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
           </div>
           <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, fontSize: 13, color: T.textDim }}>
             {halves}×{halfDuration}min = {totalMatchTime}min

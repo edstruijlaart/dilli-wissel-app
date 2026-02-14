@@ -16,7 +16,7 @@ export default function MatchView({ state }) {
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
-    matchCode, isOnline, syncError,
+    matchCode, isOnline, syncError, startTimer,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -93,15 +93,21 @@ export default function MatchView({ state }) {
             {onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setIsPaused(!isPaused)} style={{ ...(isPaused ? btnP : btnS), flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                {isPaused ? Icons.play(12, "#FFFFFF") : Icons.pause(12, T.textDim)} {isPaused ? "Hervat" : "Pauze"}
+            {!isRunning ? (
+              <button onClick={startTimer} style={{ ...btnP, padding: "16px 0", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}>
+                {Icons.play(16, "#FFF")} Start wedstrijd
               </button>
-              <button onClick={() => setShowKeeperPicker(!showKeeperPicker)} style={{ ...btnS, padding: "10px 14px", display: "flex", alignItems: "center", gap: 6, borderColor: showKeeperPicker ? T.keeperDim : T.glassBorder }}>
-                {Icons.glove(14, T.keeper)}
-              </button>
-              <button onClick={() => { setIsRunning(false); setView(VIEWS.SUMMARY); }} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
-            </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setIsPaused(!isPaused)} style={{ ...(isPaused ? btnP : btnS), flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  {isPaused ? Icons.play(12, "#FFFFFF") : Icons.pause(12, T.textDim)} {isPaused ? "Hervat" : "Pauze"}
+                </button>
+                <button onClick={() => setShowKeeperPicker(!showKeeperPicker)} style={{ ...btnS, padding: "10px 14px", display: "flex", alignItems: "center", gap: 6, borderColor: showKeeperPicker ? T.keeperDim : T.glassBorder }}>
+                  {Icons.glove(14, T.keeper)}
+                </button>
+                <button onClick={() => { setIsRunning(false); setView(VIEWS.SUMMARY); }} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
+              </div>
+            )}
             {isRunning && !halfBreak && (
               <button onClick={() => setShowEndHalfConfirm(true)} style={{ ...btnS, width: "100%", padding: "10px 0", fontSize: 13, borderColor: T.warnDim, color: T.warn }}>
                 ⏱️ Helft {currentHalf} nu beëindigen

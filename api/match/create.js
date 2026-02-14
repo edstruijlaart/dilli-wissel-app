@@ -6,6 +6,35 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
+    const { team, homeTeam, awayTeam, players, keeper, playersOnField, halfDuration, halves, subInterval } = req.body;
+
+    // Check of team al een actieve wedstrijd heeft
+    if (team) {
+      const keys = [];
+      let cursor = 0;
+      do {
+        const [nextCursor, results] = await redis.scan(cursor, { match: 'match:*', count: 100 });
+        cursor = nextCursor;
+        keys.push(...results.filter(k => !k.includes(':events')));
+      } while (cursor && cursor !== 0 && cursor !== '0');
+
+      for (const key of keys) {
+        try {
+          const existing = await redis.get(key);
+          if (existing) {
+            const existingMatch = typeof existing === 'string' ? JSON.parse(existing) : existing;
+            // Check of hetzelfde team en nog niet afgelopen
+            if (existingMatch.team === team && existingMatch.status !== 'ended') {
+              return res.status(409).json({
+                error: 'Team heeft al een actieve wedstrijd',
+                existingCode: key.replace('match:', '')
+              });
+            }
+          }
+        } catch {}
+      }
+    }
+
     // Genereer unieke 4-letter code
     let code, exists;
     do {
@@ -13,13 +42,11 @@ export default async function handler(req, res) {
       exists = await redis.exists(`match:${code}`);
     } while (exists);
 
-    const { team, homeTeam, awayTeam, players, keeper, playersOnField, halfDuration, halves, subInterval } = req.body;
-
     const match = {
       code,
       status: 'setup',
       team: team || '',
-      homeTeam: homeTeam || 'Dilettant',
+      homeTeam: team || homeTeam || 'Dilettant',
       awayTeam: awayTeam || '',
       players: players || [],
       keeper: keeper || null,

@@ -121,6 +121,18 @@ export function useMatchState() {
         }),
       });
       const data = await res.json();
+
+      if (res.status === 409) {
+        // Team heeft al een actieve wedstrijd
+        setSyncError(`${team} heeft al een actieve wedstrijd (${data.existingCode})`);
+        return null;
+      }
+
+      if (!res.ok) {
+        setSyncError('Wedstrijd aanmaken mislukt');
+        return null;
+      }
+
       setMatchCode(data.code);
       setIsOnline(true);
       return data.code;
@@ -147,17 +159,22 @@ export function useMatchState() {
 
   const startMatch = () => {
     if (players.length <= playersOnField) return;
-    playWhistle();
     const init = {}; players.forEach(p => (init[p] = 0));
     let fl, bl;
     if (keeper) { const nk = players.filter(p => p !== keeper); fl = [keeper, ...nk.slice(0, playersOnField - 1)]; bl = nk.slice(playersOnField - 1); }
     else { fl = players.slice(0, playersOnField); bl = players.slice(playersOnField); }
     setOnField(fl); setOnBench(bl); setMatchKeeper(keeper);
     setPlayTime(init); setCurrentHalf(1); setMatchTimer(0); setSubTimer(0);
-    setIsRunning(true); setIsPaused(false); setShowSubAlert(false);
+    setIsRunning(false); setIsPaused(false); setShowSubAlert(false);
     setSubHistory([]); setHalfBreak(false); alertShownRef.current = false;
     setHomeScore(0); setAwayScore(0); setGoalScorers({});
     setView(VIEWS.MATCH);
+  };
+
+  const startTimer = () => {
+    playWhistle();
+    setIsRunning(true);
+    setIsPaused(false);
     addEvent({ type: 'match_start', time: '0:00', half: 1 });
   };
 
@@ -360,7 +377,7 @@ export function useMatchState() {
     totalMatchTime,
     // Actions
     addPlayer, removePlayer, movePlayer, toggleKeeper,
-    startMatch, executeSubs, skipSubs, forceEndHalf, startNextHalf,
+    startMatch, startTimer, executeSubs, skipSubs, forceEndHalf, startNextHalf,
     manualSub, swapKeeper, setIsRunning,
   };
 }

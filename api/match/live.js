@@ -37,7 +37,8 @@ export default async function handler(req, res) {
 
               matches.push({
                 code,
-                homeTeam: match.homeTeam || 'Dilettant',
+                team: match.team || null,
+                homeTeam: match.team || match.homeTeam || 'Dilettant',
                 awayTeam: match.awayTeam || 'Tegenstander',
                 homeScore: match.homeScore || 0,
                 awayScore: match.awayScore || 0,
