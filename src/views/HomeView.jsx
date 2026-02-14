@@ -207,28 +207,29 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
               <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
             </div>
             {liveMatches.map((match) => (
-              <div key={match.code} style={{ position: 'relative' }}>
+              <div key={match.code} style={{ ...card, padding: 16, transition: "transform 0.2s, box-shadow 0.2s" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
+                }}
+              >
                 <button
                   onClick={() => handleMatchClick(match)}
                   style={{
-                    ...card,
-                    padding: 16,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
                     textAlign: "left",
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
                     cursor: "pointer",
-                    border: "none",
-                    transition: "transform 0.2s, box-shadow 0.2s",
                     width: '100%',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-2px)";
-                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
+                    fontFamily: "'DM Sans',sans-serif",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -252,16 +253,16 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 <button
                   onClick={(e) => shareMatch(match, e)}
                   style={{
-                    position: 'absolute',
-                    top: 12,
-                    right: 12,
+                    width: '100%',
+                    marginTop: 8,
                     background: T.glass,
                     border: `1px solid ${T.glassBorder}`,
                     borderRadius: 10,
-                    padding: '8px 12px',
+                    padding: '10px 14px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 6,
                     fontSize: 13,
                     fontWeight: 600,
@@ -279,7 +280,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                   }}
                 >
                   {Icons.share(14, T.accent)}
-                  Deel
+                  Deel wedstrijd
                 </button>
               </div>
             ))}
