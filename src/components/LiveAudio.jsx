@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import DailyIframe from '@daily-co/daily-js';
+import React, { useState, useEffect } from 'react';
+import { Room, RoomEvent } from 'livekit-client';
 import { T, btnP, btnS, btnD } from '../theme';
 import Icons from './Icons';
 
 /**
- * LiveAudio component - handles Daily.co audio streaming
+ * LiveAudio component - LiveKit audio streaming
  *
  * @param {string} matchCode - 4-letter match code
  * @param {boolean} isCoach - true = broadcaster (mic on), false = listener (mic off)
@@ -14,114 +14,107 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
   const [status, setStatus] = useState('idle'); // idle | connecting | connected | error
   const [participants, setParticipants] = useState(0);
   const [muted, setMuted] = useState(false);
-  const callFrameRef = useRef(null);
-  const dailyRef = useRef(null);
+  const [room, setRoom] = useState(null);
 
   useEffect(() => {
     return () => {
       // Cleanup on unmount
-      if (dailyRef.current) {
-        dailyRef.current.destroy().catch(() => {});
+      if (room) {
+        room.disconnect();
       }
     };
-  }, []);
+  }, [room]);
 
   const startLiveAudio = async () => {
     try {
       setStatus('connecting');
 
-      // Create/join room
-      const endpoint = isCoach ? 'POST' : 'GET';
-      const res = await fetch(`/api/match/audio-room/${matchCode}`, {
-        method: endpoint,
+      // Generate access token
+      const identity = isCoach ? `coach-${Date.now()}` : `viewer-${Date.now()}`;
+      const res = await fetch(`/api/match/audio-token/${matchCode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identity, isCoach }),
       });
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || 'Failed to start live audio');
+        throw new Error(error.error || 'Failed to get access token');
       }
 
-      const { url, token } = await res.json();
+      const { token, url, roomName } = await res.json();
 
-      // Initialize Daily.co
-      dailyRef.current = DailyIframe.createCallObject({
-        audioSource: isCoach, // Coach uses mic, viewers don't
-        videoSource: false, // Audio-only
-        dailyConfig: {
-          experimentalChromeVideoMuteLightOff: true, // No camera indicator
+      // Create room instance
+      const newRoom = new Room({
+        adaptiveStream: true, // Optimize bandwidth
+        dynacast: true, // Dynamic broadcasting
+        audioCaptureDefaults: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
         },
       });
 
       // Event listeners
-      dailyRef.current
-        .on('joined-meeting', () => {
-          console.log('Joined live audio');
+      newRoom
+        .on(RoomEvent.Connected, () => {
+          console.log('Connected to LiveKit room');
           setStatus('connected');
-          if (isCoach) {
-            dailyRef.current.setLocalAudio(true); // Coach mic on
-          }
+          updateParticipantCount(newRoom);
         })
-        .on('participant-joined', () => {
-          updateParticipantCount();
+        .on(RoomEvent.ParticipantConnected, () => {
+          updateParticipantCount(newRoom);
         })
-        .on('participant-left', () => {
-          updateParticipantCount();
+        .on(RoomEvent.ParticipantDisconnected, () => {
+          updateParticipantCount(newRoom);
         })
-        .on('error', (error) => {
-          console.error('Daily.co error:', error);
-          setStatus('error');
-          onError?.(error.errorMsg || 'Audio connection failed');
-        })
-        .on('left-meeting', () => {
+        .on(RoomEvent.Disconnected, () => {
           setStatus('idle');
           setParticipants(0);
+        })
+        .on(RoomEvent.Reconnecting, () => {
+          console.log('Reconnecting to LiveKit...');
+        })
+        .on(RoomEvent.Reconnected, () => {
+          console.log('Reconnected to LiveKit');
         });
 
-      // Join call
-      await dailyRef.current.join({ url, token });
+      // Connect to room
+      await newRoom.connect(url, token);
+
+      // Enable microphone for coach
+      if (isCoach) {
+        await newRoom.localParticipant.setMicrophoneEnabled(true);
+      }
+
+      setRoom(newRoom);
     } catch (err) {
-      console.error('Live audio start error:', err);
+      console.error('LiveKit connection error:', err);
       setStatus('error');
       onError?.(err.message);
     }
   };
 
   const stopLiveAudio = async () => {
-    try {
-      if (dailyRef.current) {
-        await dailyRef.current.leave();
-        await dailyRef.current.destroy();
-        dailyRef.current = null;
-      }
-
-      // Coach: delete room
-      if (isCoach) {
-        await fetch(`/api/match/audio-room/${matchCode}`, {
-          method: 'DELETE',
-        });
-      }
-
-      setStatus('idle');
-      setParticipants(0);
-    } catch (err) {
-      console.error('Stop live audio error:', err);
+    if (room) {
+      await room.disconnect();
+      setRoom(null);
     }
+    setStatus('idle');
+    setParticipants(0);
   };
 
-  const toggleMute = () => {
-    if (dailyRef.current && isCoach) {
+  const toggleMute = async () => {
+    if (room && isCoach) {
       const newMuted = !muted;
-      dailyRef.current.setLocalAudio(!newMuted);
+      await room.localParticipant.setMicrophoneEnabled(!newMuted);
       setMuted(newMuted);
     }
   };
 
-  const updateParticipantCount = () => {
-    if (dailyRef.current) {
-      const participants = dailyRef.current.participants();
-      const count = Object.keys(participants).length;
-      setParticipants(count);
-    }
+  const updateParticipantCount = (r) => {
+    const count = r.participants.size + 1; // +1 for local participant
+    setParticipants(count);
   };
 
   // Coach view
