@@ -138,3 +138,47 @@ Zie planbestand: `~/.claude/plans/synchronous-orbiting-hellman.md`
 
 Standalone privéproject. Geen directe relatie met Ed's muziek/podcast projecten.
 Draait straks op Vercel (zelfde account als edstruijlaart.nl, apart project).
+
+## Release Checklist
+
+Bij elke nieuwe versie:
+
+### 1. Versie updaten
+```bash
+# Update beide bestanden:
+# - src/version.js → export const VERSION = '3.x.x'
+# - package.json → "version": "3.x.x"
+```
+
+**Versie nummering:**
+- **Patch (3.2.1)**: Bug fixes, kleine UI tweaks
+- **Minor (3.3.0)**: Nieuwe features (bijv. live audio, foto's)
+- **Major (4.0.0)**: Breaking changes (bijv. nieuwe architectuur)
+
+### 2. Commit + Deploy
+```bash
+git add -A
+git commit -m "Release v3.x.x - [korte samenvatting]"
+git push origin main
+```
+
+Vercel deployt automatisch binnen ~2 minuten.
+
+### 3. Update Announcement (optioneel)
+
+Als je de update wilt delen met ouders/coaches:
+
+**Template:**
+```
+Dilli Wissel App v3.x.x 🎉
+
+✅ [Feature 1]
+✅ [Feature 2]
+✅ [Feature 3]
+
+Update via je browser (verversen) of herinstalleer via homescreen!
+
+Ontwikkeld door Ears Want Music
+```
+
+Delen via WhatsApp groep of tijdens wedstrijd.

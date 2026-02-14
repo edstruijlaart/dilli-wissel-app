@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { T, base, card, btnP, btnS } from '../theme';
 import DilliLogo from '../components/DilliLogo';
 import Icons from '../components/Icons';
+import { VERSION } from '../version';
 
 export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAsCoach }) {
   const [liveMatches, setLiveMatches] = useState([]);
@@ -304,7 +305,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
         {/* Versie & Ontwikkelaar */}
         <div style={{ textAlign: "center", marginTop: 32, paddingBottom: 20 }}>
           <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-            Versie 3.1.0
+            Versie {VERSION}
           </p>
           <p style={{ fontSize: 11, color: T.textMuted }}>
             Ontwikkeld door <strong style={{ color: T.text }}>Ears Want Music</strong>
