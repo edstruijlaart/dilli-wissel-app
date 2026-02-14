@@ -27,6 +27,7 @@ export default function MatchView({ state }) {
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [audioRefresh, setAudioRefresh] = useState(0);
+  const [liveAudioError, setLiveAudioError] = useState(null);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
   const wakeLockRef = useRef(null);
@@ -200,7 +201,17 @@ export default function MatchView({ state }) {
 
         {/* Live Audio Streaming */}
         {isOnline && matchCode && isRunning && !halfBreak && (
-          <LiveAudio matchCode={matchCode} isCoach={true} onError={(err) => console.error('Live audio error:', err)} />
+          <>
+            <LiveAudio matchCode={matchCode} isCoach={true} onError={(err) => {
+              console.error('Live audio error:', err);
+              setLiveAudioError(err);
+            }} />
+            {liveAudioError && (
+              <div style={{ padding: 12, marginBottom: 10, background: 'rgba(220,38,38,0.1)', border: `1px solid ${T.dangerDim}`, borderRadius: 12 }}>
+                <p style={{ fontSize: 11, color: T.danger, margin: 0 }}>Error: {liveAudioError}</p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Audio Update Button */}
