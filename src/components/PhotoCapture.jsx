@@ -16,6 +16,7 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -93,9 +94,54 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
     setStatus('captured');
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Max dimensions (same as camera)
+        const MAX_WIDTH = 1920;
+        const MAX_HEIGHT = 1080;
+
+        let width = img.width;
+        let height = img.height;
+
+        // Scale down if needed
+        if (width > MAX_WIDTH) {
+          height = (height * MAX_WIDTH) / width;
+          width = MAX_WIDTH;
+        }
+        if (height > MAX_HEIGHT) {
+          width = (width * MAX_HEIGHT) / height;
+          height = MAX_HEIGHT;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        console.log('Library photo size:', Math.round(imageData.length / 1024), 'KB');
+
+        setPhotoData(imageData);
+        setStatus('captured');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const retake = () => {
     setPhotoData(null);
-    startCamera();
+    setStatus('idle');
   };
 
   const uploadPhoto = async () => {
@@ -161,10 +207,23 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
           <div style={{ textAlign: 'center', padding: 20 }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>📷</div>
             <p style={{ fontSize: 14, color: '#FFF', marginBottom: 20 }}>Maak een foto van het veld</p>
-            <button onClick={startCamera} style={{ ...btnP, padding: '14px 28px', fontSize: 15 }}>
-              {Icons.camera(18, '#FFF')}
-              <span style={{ marginLeft: 8 }}>Open camera</span>
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 280, margin: '0 auto' }}>
+              <button onClick={startCamera} style={{ ...btnP, padding: '14px 28px', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {Icons.camera(18, '#FFF')}
+                <span>Open camera</span>
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} style={{ ...btnS, padding: '14px 28px', fontSize: 15, background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.3)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {Icons.image(18, '#FFF')}
+                <span>Kies uit bibliotheek</span>
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
           </div>
         )}
 
