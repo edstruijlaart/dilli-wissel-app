@@ -99,7 +99,11 @@ export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClo
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
-      <div style={{ background: T.bg, borderRadius: 20, padding: 28, width: '100%', maxWidth: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+      <div style={{ background: T.bg, borderRadius: 20, padding: 28, width: '100%', maxWidth: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.2)', position: 'relative' }}>
+        {/* Close button */}
+        <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, fontSize: 20, lineHeight: 1 }}>
+          ×
+        </button>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>🎙️</div>
           <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>Audio Update</h3>
