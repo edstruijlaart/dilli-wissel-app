@@ -44,6 +44,7 @@ export function useMatchState() {
   const [matchCode, setMatchCode] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [team, setTeam] = useState("");
+  const [coachName, setCoachName] = useState("");
   const [syncError, setSyncError] = useState(null);
 
   const intervalRef = useRef(null);
@@ -56,6 +57,7 @@ export function useMatchState() {
   const getMatchSnapshot = useCallback(() => ({
     status: view === VIEWS.MATCH ? (halfBreak ? 'halftime' : isRunning ? (isPaused ? 'paused' : 'live') : 'ended') : view === VIEWS.SUMMARY ? 'ended' : 'setup',
     team,
+    coachName,
     homeTeam, awayTeam,
     players, keeper: matchKeeper,
     matchKeeper,
@@ -70,7 +72,7 @@ export function useMatchState() {
     subElapsedAtPause: subTimer,
     playTime,
     isRunning, isPaused, halfBreak,
-  }), [view, team, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime]);
+  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -393,6 +395,7 @@ export function useMatchState() {
     pasteText, setPasteText, pasteResult, setPasteResult,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
+    coachName, setCoachName,
     createOnlineMatch, updateScore, reconnectToMatch,
     // Computed
     totalMatchTime,

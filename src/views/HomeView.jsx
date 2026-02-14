@@ -12,6 +12,9 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
   const [coachCode, setCoachCode] = useState('');
   const [coachError, setCoachError] = useState('');
   const [checking, setChecking] = useState(false);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [coachName, setCoachName] = useState('');
+  const [verifiedTeamData, setVerifiedTeamData] = useState(null);
   const [loggedInTeam, setLoggedInTeam] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dilli_coach'))?.team || null; } catch { return null; }
   });
@@ -90,22 +93,9 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
       const data = await res.json();
       if (data.valid) {
         const teamData = { team: data.team || null, players: data.players || [] };
-        localStorage.setItem('dilli_coach', JSON.stringify(teamData));
-        setLoggedInTeam(teamData.team);
+        setVerifiedTeamData(teamData);
         setShowCoachCode(false);
-
-        // Als we een wedstrijd geselecteerd hebben → join als coach
-        if (selectedMatch && onJoinAsCoach) {
-          const success = await onJoinAsCoach(selectedMatch.code);
-          if (!success) {
-            setCoachError('Wedstrijd niet gevonden');
-            setShowCoachCode(true);
-          }
-          setSelectedMatch(null);
-        } else {
-          // Anders nieuwe wedstrijd starten
-          onStartOnline(teamData);
-        }
+        setShowNamePrompt(true);
       } else {
         setCoachError('Ongeldige code');
       }
@@ -113,6 +103,35 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
       setCoachError('Verbinding mislukt');
     }
     setChecking(false);
+  };
+
+  const confirmCoachName = () => {
+    if (!coachName.trim() || !verifiedTeamData) return;
+
+    const teamData = {
+      ...verifiedTeamData,
+      coachName: coachName.trim()
+    };
+    localStorage.setItem('dilli_coach', JSON.stringify(teamData));
+    setLoggedInTeam(teamData.team);
+    setShowNamePrompt(false);
+
+    // Als we een wedstrijd geselecteerd hebben → join als coach
+    if (selectedMatch && onJoinAsCoach) {
+      onJoinAsCoach(selectedMatch.code).then(success => {
+        if (!success) {
+          setCoachError('Wedstrijd niet gevonden');
+          setShowCoachCode(true);
+        }
+        setSelectedMatch(null);
+      });
+    } else {
+      // Anders nieuwe wedstrijd starten
+      onStartOnline(teamData);
+    }
+
+    setCoachName('');
+    setVerifiedTeamData(null);
   };
 
   const statusText = (status) => {
@@ -350,6 +369,58 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 Als toeschouwer meekijken
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Coach name modal */}
+      {showNamePrompt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
+          <div style={{ ...card, padding: 28, width: "100%", maxWidth: 360, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+              Wat is je naam?
+            </h3>
+            <p style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>
+              Zo kunnen spelers en ouders zien wie er coacht
+            </p>
+            <input
+              type="text"
+              value={coachName}
+              onChange={(e) => setCoachName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmCoachName()}
+              placeholder="Bijv. Ed"
+              autoFocus
+              autoComplete="name"
+              style={{
+                width: "100%",
+                textAlign: "center",
+                fontSize: 18,
+                fontWeight: 600,
+                padding: "12px 16px",
+                border: `2px solid ${T.glassBorder}`,
+                borderRadius: 14,
+                outline: "none",
+                fontFamily: "'DM Sans',sans-serif",
+                color: T.text,
+                background: T.glass,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => { setShowNamePrompt(false); setCoachName(''); setVerifiedTeamData(null); }}
+                style={{ ...btnS, flex: 1, padding: "12px 16px" }}
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={confirmCoachName}
+                disabled={!coachName.trim()}
+                style={{ ...btnP, flex: 1, padding: "12px 16px", opacity: !coachName.trim() ? 0.5 : 1 }}
+              >
+                Start
+              </button>
+            </div>
           </div>
         </div>
       )}

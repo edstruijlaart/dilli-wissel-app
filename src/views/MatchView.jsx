@@ -18,7 +18,7 @@ export default function MatchView({ state }) {
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
-    matchCode, isOnline, syncError, startTimer,
+    matchCode, isOnline, syncError, startTimer, coachName,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -109,10 +109,17 @@ export default function MatchView({ state }) {
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
         {/* Online indicator */}
         {isOnline && matchCode && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 8, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
-            {syncError || `Live · Code: ${matchCode}`}
-            {viewers > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4 }}>{Icons.eye(12, T.textMuted)} {viewers}</span>}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
+              {syncError || `Live · Code: ${matchCode}`}
+              {viewers > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4 }}>{Icons.eye(12, T.textMuted)} {viewers}</span>}
+            </div>
+            {coachName && (
+              <div style={{ padding: "4px 12px", borderRadius: 8, background: T.accentDim, border: `1px solid ${T.accent}33` }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.accent }}>Coach: {coachName}</span>
+              </div>
+            )}
           </div>
         )}
         {/* Timer */}
