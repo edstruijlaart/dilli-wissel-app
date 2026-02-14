@@ -77,6 +77,14 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
         })
         .on(RoomEvent.Reconnected, () => {
           console.log('Reconnected to LiveKit');
+        })
+        .on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+          console.log('Track subscribed:', track.kind, 'from', participant.identity);
+          // Auto-play audio tracks for viewers
+          if (track.kind === 'audio' && !isCoach) {
+            const audioElement = track.attach();
+            audioElement.play().catch(err => console.error('Audio autoplay failed:', err));
+          }
         });
 
       // Connect to room
