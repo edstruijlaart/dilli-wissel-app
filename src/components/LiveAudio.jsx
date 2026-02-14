@@ -11,16 +11,20 @@ import Icons from './Icons';
  * @param {function} onError - callback when error occurs
  */
 export default function LiveAudio({ matchCode, isCoach = false, onError }) {
-  const [status, setStatus] = useState('idle'); // idle | connecting | connected | error
+  const [status, setStatus] = useState('idle'); // idle | connecting | connected | error | no_stream
   const [participants, setParticipants] = useState(0);
   const [muted, setMuted] = useState(false);
   const [room, setRoom] = useState(null);
+  const streamCheckTimeoutRef = useRef(null);
 
   useEffect(() => {
     return () => {
       // Cleanup on unmount
       if (room) {
         room.disconnect();
+      }
+      if (streamCheckTimeoutRef.current) {
+        clearTimeout(streamCheckTimeoutRef.current);
       }
     };
   }, [room]);
@@ -82,6 +86,11 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
           console.log('Track subscribed:', track.kind, 'from', participant.identity);
           // Auto-play audio tracks for viewers
           if (track.kind === 'audio' && !isCoach) {
+            // Clear the "no stream" timeout since we got a track
+            if (streamCheckTimeoutRef.current) {
+              clearTimeout(streamCheckTimeoutRef.current);
+              streamCheckTimeoutRef.current = null;
+            }
             const audioElement = track.attach();
             audioElement.play().catch(err => console.error('Audio autoplay failed:', err));
           }
@@ -93,6 +102,24 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
       // Enable microphone for coach
       if (isCoach) {
         await newRoom.localParticipant.setMicrophoneEnabled(true);
+      }
+
+      // For viewers: check if there's an active stream within 5 seconds
+      if (!isCoach) {
+        streamCheckTimeoutRef.current = setTimeout(() => {
+          // Check if we received any audio tracks
+          const hasAudioTracks = Array.from(newRoom.remoteParticipants.values()).some(
+            participant => participant.audioTracks.size > 0
+          );
+
+          if (!hasAudioTracks) {
+            console.log('No active audio stream detected');
+            newRoom.disconnect();
+            setStatus('no_stream');
+            setRoom(null);
+            return;
+          }
+        }, 5000); // Wait 5 seconds for audio tracks
       }
 
       setRoom(newRoom);
@@ -345,6 +372,25 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
         }}
       >
         <p style={{ fontSize: 13, color: T.danger, margin: '0 0 10px' }}>Kan niet verbinden met live audio</p>
+        <button onClick={startLiveAudio} style={{ ...btnS, width: '100%', padding: '10px 0', fontSize: 13 }}>
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'no_stream') {
+    return (
+      <div
+        style={{
+          padding: '14px 16px',
+          marginBottom: 16,
+          background: 'rgba(251,191,36,0.06)',
+          border: `1px solid ${T.warnDim}`,
+          borderRadius: 14,
+        }}
+      >
+        <p style={{ fontSize: 13, color: T.warn, margin: '0 0 10px' }}>Geen actieve livestream op dit moment</p>
         <button onClick={startLiveAudio} style={{ ...btnS, width: '100%', padding: '10px 0', fontSize: 13 }}>
           Opnieuw proberen
         </button>
