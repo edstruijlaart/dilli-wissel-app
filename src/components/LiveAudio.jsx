@@ -113,7 +113,8 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
   };
 
   const updateParticipantCount = (r) => {
-    const count = r.participants.size + 1; // +1 for local participant
+    // LiveKit uses remoteParticipants (Map), not participants
+    const count = (r.remoteParticipants?.size || 0) + 1; // +1 for local participant
     setParticipants(count);
   };
 
