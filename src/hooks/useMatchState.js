@@ -215,6 +215,17 @@ export function useMatchState() {
 
   const skipSubs = () => { setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false; };
 
+  const forceEndHalf = () => {
+    clearInterval(intervalRef.current);
+    if (currentHalf < halves) {
+      setHalfBreak(true); setShowSubAlert(false); notifyHalf();
+      addEvent({ type: 'half_end_manual', time: fmt(matchTimer), half: currentHalf });
+    } else {
+      setIsRunning(false); notifyEnd(); setView(VIEWS.SUMMARY);
+      addEvent({ type: 'match_end_manual', time: fmt(matchTimer), half: currentHalf });
+    }
+  };
+
   const startNextHalf = () => {
     setCurrentHalf(p => p + 1); setHalfBreak(false); setSubTimer(0); alertShownRef.current = false;
     addEvent({ type: 'half_start', time: fmt(matchTimer), half: currentHalf + 1 });
@@ -349,7 +360,7 @@ export function useMatchState() {
     totalMatchTime,
     // Actions
     addPlayer, removePlayer, movePlayer, toggleKeeper,
-    startMatch, executeSubs, skipSubs, startNextHalf,
+    startMatch, executeSubs, skipSubs, forceEndHalf, startNextHalf,
     manualSub, swapKeeper, setIsRunning,
   };
 }

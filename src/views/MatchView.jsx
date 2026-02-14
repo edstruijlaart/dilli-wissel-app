@@ -15,11 +15,12 @@ export default function MatchView({ state }) {
     showKeeperPicker, setShowKeeperPicker,
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
-    executeSubs, skipSubs, startNextHalf, manualSub, swapKeeper, updateScore,
+    executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
+  const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
 
@@ -91,14 +92,21 @@ export default function MatchView({ state }) {
             <span style={{ color: T.textMuted }}>Rest: {fmt(Math.max(0, hr))}</span>
             {onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button onClick={() => setIsPaused(!isPaused)} style={{ ...(isPaused ? btnP : btnS), flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              {isPaused ? Icons.play(12, "#FFFFFF") : Icons.pause(12, T.textDim)} {isPaused ? "Hervat" : "Pauze"}
-            </button>
-            <button onClick={() => setShowKeeperPicker(!showKeeperPicker)} style={{ ...btnS, padding: "10px 14px", display: "flex", alignItems: "center", gap: 6, borderColor: showKeeperPicker ? T.keeperDim : T.glassBorder }}>
-              {Icons.glove(14, T.keeper)}
-            </button>
-            <button onClick={() => { setIsRunning(false); setView(VIEWS.SUMMARY); }} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setIsPaused(!isPaused)} style={{ ...(isPaused ? btnP : btnS), flex: 1, padding: "10px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                {isPaused ? Icons.play(12, "#FFFFFF") : Icons.pause(12, T.textDim)} {isPaused ? "Hervat" : "Pauze"}
+              </button>
+              <button onClick={() => setShowKeeperPicker(!showKeeperPicker)} style={{ ...btnS, padding: "10px 14px", display: "flex", alignItems: "center", gap: 6, borderColor: showKeeperPicker ? T.keeperDim : T.glassBorder }}>
+                {Icons.glove(14, T.keeper)}
+              </button>
+              <button onClick={() => { setIsRunning(false); setView(VIEWS.SUMMARY); }} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
+            </div>
+            {isRunning && !halfBreak && (
+              <button onClick={() => setShowEndHalfConfirm(true)} style={{ ...btnS, width: "100%", padding: "10px 0", fontSize: 13, borderColor: T.warnDim, color: T.warn }}>
+                ⏱️ Helft {currentHalf} nu beëindigen
+              </button>
+            )}
           </div>
         </div>
 
@@ -258,6 +266,34 @@ export default function MatchView({ state }) {
               ))}
             </div>
             {!manualSubMode && !showSubAlert && !halfBreak && <p style={{ fontSize: 11, color: T.textMuted, textAlign: "center", marginTop: 10, marginBottom: 0 }}>Tik op veldspeler voor handmatige wissel</p>}
+          </div>
+        )}
+
+        {/* End half confirmation */}
+        {showEndHalfConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowEndHalfConfirm(false); }}>
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "slideIn .25s", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 32, marginBottom: 4 }}>⏱️</div>
+                <h3 style={{ color: T.text, fontSize: 16, fontWeight: 700, margin: 0 }}>Helft {currentHalf} nu beëindigen?</h3>
+                <p style={{ fontSize: 13, color: T.textMuted, marginTop: 8, marginBottom: 0 }}>
+                  {currentHalf < halves
+                    ? `De rust begint direct (huidige tijd: ${fmt(matchTimer)})`
+                    : "De wedstrijd eindigt en je gaat naar de samenvatting"}
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { forceEndHalf(); setShowEndHalfConfirm(false); }}
+                  style={{ ...btnP, flex: 1, padding: "12px 0", fontSize: 14 }}>
+                  Ja, beëindig helft
+                </button>
+                <button onClick={() => setShowEndHalfConfirm(false)}
+                  style={{ ...btnS, padding: "12px 20px", fontSize: 14 }}>
+                  Annuleer
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

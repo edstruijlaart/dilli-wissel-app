@@ -115,8 +115,10 @@ npm run preview  # Preview productie build
 
 ## Productie
 
-- **Huidige staat**: Lokaal ontwikkelen, PWA installeren via `npm run build` + preview
-- **Toekomst (fase 2)**: Vercel deploy op `dilli.edstruijlaart.nl`
+- **URL**: `https://dilli.edstruijlaart.nl` (Vercel)
+- **Deploy**: Auto-deploy bij `git push` naar `main`
+- **Status**: ✅ Live — laatste deploy 2d geleden
+- **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 - **Legacy versie**: Originele single-file app staat op `legacy` branch
 
 ## Git Branches
