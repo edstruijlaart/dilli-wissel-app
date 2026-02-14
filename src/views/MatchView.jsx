@@ -5,6 +5,8 @@ import { fireConfetti } from '../utils/confetti';
 import { vibrate } from '../utils/audio';
 import Icons from '../components/Icons';
 import Badge from '../components/Badge';
+import AudioRecorder from '../components/AudioRecorder';
+import AudioTimeline from '../components/AudioTimeline';
 import { VIEWS } from '../hooks/useMatchState';
 
 export default function MatchView({ state }) {
@@ -21,6 +23,8 @@ export default function MatchView({ state }) {
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [audioRefresh, setAudioRefresh] = useState(0);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
 
@@ -136,6 +140,16 @@ export default function MatchView({ state }) {
             </div>
           </div>
         </div>
+
+        {/* Audio Timeline - Coach Updates */}
+        {isOnline && matchCode && <AudioTimeline matchCode={matchCode} key={audioRefresh} />}
+
+        {/* Audio Update Button */}
+        {isOnline && matchCode && isRunning && !halfBreak && (
+          <button onClick={() => setShowAudioRecorder(true)} style={{ ...btnS, width: "100%", padding: "12px 0", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderColor: T.accentDim, color: T.accent }}>
+            🎙️ Opneem update
+          </button>
+        )}
 
         {/* Keeper picker */}
         {showKeeperPicker && (
@@ -333,6 +347,20 @@ export default function MatchView({ state }) {
               </button>
             </div>
           </div>
+        )}
+
+        {/* Audio Recorder */}
+        {showAudioRecorder && (
+          <AudioRecorder
+            matchCode={matchCode}
+            matchTime={fmt(matchTimer)}
+            currentHalf={currentHalf}
+            onClose={() => setShowAudioRecorder(false)}
+            onUploaded={() => {
+              setShowAudioRecorder(false);
+              setAudioRefresh(prev => prev + 1);
+            }}
+          />
         )}
       </div>
     </div>

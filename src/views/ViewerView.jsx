@@ -7,6 +7,7 @@ import { useMatchPolling } from '../hooks/useMatchPolling';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Icons from '../components/Icons';
+import AudioTimeline from '../components/AudioTimeline';
 
 export default function ViewerView({ code, onBack }) {
   const { match, events, error, loading, getElapsed, getSubElapsed } = useMatchPolling(code);
@@ -148,6 +149,9 @@ export default function ViewerView({ code, onBack }) {
             <div style={{ ...mono, fontSize: 40, fontWeight: 800, color: T.text }}>{match.awayScore}</div>
           </div>
         </div>
+
+        {/* Audio Timeline - Coach Updates */}
+        <AudioTimeline matchCode={code} />
 
         {/* Half break */}
         {match.halfBreak && (
