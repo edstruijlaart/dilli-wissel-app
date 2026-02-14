@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       canPublishData: false,
     });
 
-    const jwt = token.toJwt();
+    const jwt = await token.toJwt();
 
     return res.status(200).json({
       token: jwt,
