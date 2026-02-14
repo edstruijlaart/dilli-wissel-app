@@ -193,7 +193,8 @@ export default function MatchView({ state }) {
         {/* Audio Update Button */}
         {isOnline && matchCode && isRunning && !halfBreak && (
           <button onClick={() => setShowAudioRecorder(true)} style={{ ...btnS, width: "100%", padding: "12px 0", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderColor: T.accentDim, color: T.accent }}>
-            🎙️ Opneem update
+            {Icons.microphone(16, T.accent)}
+            Audio update
           </button>
         )}
 
