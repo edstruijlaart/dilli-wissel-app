@@ -317,69 +317,94 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
       {showCoachCode && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
           <div style={{ ...card, padding: 28, width: "100%", maxWidth: 360, textAlign: "center" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>
-              {selectedMatch ? 'Ben je coach?' : 'Coachcode'}
-            </h3>
-            {selectedMatch && (
-              <p style={{ fontSize: 13, color: T.text, fontWeight: 600, marginBottom: 8 }}>
-                {selectedMatch.homeTeam} - {selectedMatch.awayTeam}
-              </p>
-            )}
-            <p style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>
-              {selectedMatch
-                ? 'Voer de coach code in om wissels te kunnen doen'
-                : 'Voer je coachcode in om een wedstrijd te starten'}
-            </p>
-            <input
-              type="text"
-              value={coachCode}
-              onChange={(e) => { setCoachCode(e.target.value); setCoachError(''); }}
-              onKeyDown={(e) => e.key === 'Enter' && verifyCoachCode()}
-              placeholder="Jouw code"
-              autoFocus
-              autoComplete="off"
-              style={{
-                width: "100%", textAlign: "center", fontSize: 24, fontWeight: 700,
-                padding: "12px 16px", border: `2px solid ${coachError ? T.danger : T.glassBorder}`,
-                borderRadius: 14, outline: "none", fontFamily: "'JetBrains Mono',monospace",
-                color: T.text, background: T.glass, transition: "border-color 0.2s",
-              }}
-            />
-            {coachError && <p style={{ fontSize: 12, color: T.danger, marginTop: 8, fontWeight: 600 }}>{coachError}</p>}
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button
-                onClick={() => { setShowCoachCode(false); setSelectedMatch(null); }}
-                style={{ ...btnS, flex: 1, padding: "12px 16px" }}
-              >
-                Annuleren
-              </button>
-              <button
-                onClick={verifyCoachCode}
-                disabled={checking || !coachCode.trim()}
-                style={{ ...btnP, flex: 1, padding: "12px 16px", opacity: checking || !coachCode.trim() ? 0.5 : 1 }}
-              >
-                {checking ? 'Checken...' : 'Bevestig'}
-              </button>
-            </div>
-            {selectedMatch && (
-              <button
-                onClick={handleSkipToViewer}
-                style={{
-                  ...btnS,
-                  width: "100%",
-                  padding: "12px 16px",
-                  marginTop: 8,
-                  fontSize: 13,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6
-                }}
-              >
-                {Icons.eye(16)}
-                Als toeschouwer meekijken
-              </button>
+            {selectedMatch ? (
+              // Viewer-first UI voor live wedstrijden
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>⚽</div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 8 }}>
+                  {selectedMatch.homeTeam} - {selectedMatch.awayTeam}
+                </h3>
+                <p style={{ fontSize: 24, fontWeight: 800, color: T.accent, fontFamily: "'JetBrains Mono',monospace", marginBottom: 16 }}>
+                  {selectedMatch.homeScore} - {selectedMatch.awayScore}
+                </p>
+                <p style={{ fontSize: 13, color: T.textDim, marginBottom: 20 }}>
+                  Kijk live mee met de wedstrijd!
+                </p>
+                {/* Primair: Kijk live mee (groot) */}
+                <button
+                  onClick={handleSkipToViewer}
+                  style={{
+                    ...btnP,
+                    width: "100%",
+                    padding: "16px 20px",
+                    fontSize: 16,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginBottom: 12
+                  }}
+                >
+                  {Icons.eye(20, "#FFF")}
+                  Kijk live mee
+                </button>
+                {/* Secundair: Coach login (klein) */}
+                <button
+                  onClick={() => setSelectedMatch(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: T.textMuted,
+                    fontSize: 13,
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans',sans-serif",
+                    padding: "8px 0"
+                  }}
+                >
+                  Ben je coach? Klik hier
+                </button>
+              </>
+            ) : (
+              // Coach code flow (nieuwe wedstrijd starten of coach login)
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>Coachcode</h3>
+                <p style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>
+                  Voer je coachcode in om een wedstrijd te starten
+                </p>
+                <input
+                  type="text"
+                  value={coachCode}
+                  onChange={(e) => { setCoachCode(e.target.value); setCoachError(''); }}
+                  onKeyDown={(e) => e.key === 'Enter' && verifyCoachCode()}
+                  placeholder="Jouw code"
+                  autoFocus
+                  autoComplete="off"
+                  style={{
+                    width: "100%", textAlign: "center", fontSize: 24, fontWeight: 700,
+                    padding: "12px 16px", border: `2px solid ${coachError ? T.danger : T.glassBorder}`,
+                    borderRadius: 14, outline: "none", fontFamily: "'JetBrains Mono',monospace",
+                    color: T.text, background: T.glass, transition: "border-color 0.2s",
+                  }}
+                />
+                {coachError && <p style={{ fontSize: 12, color: T.danger, marginTop: 8, fontWeight: 600 }}>{coachError}</p>}
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <button
+                    onClick={() => { setShowCoachCode(false); setSelectedMatch(null); }}
+                    style={{ ...btnS, flex: 1, padding: "12px 16px" }}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    onClick={verifyCoachCode}
+                    disabled={checking || !coachCode.trim()}
+                    style={{ ...btnP, flex: 1, padding: "12px 16px", opacity: checking || !coachCode.trim() ? 0.5 : 1 }}
+                  >
+                    {checking ? 'Checken...' : 'Bevestig'}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
