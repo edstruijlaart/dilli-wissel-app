@@ -40,10 +40,11 @@ export default async function handler(req, res) {
     // Generate unique filename
     const filename = `match-${matchCode.toLowerCase()}-${timestamp || Date.now()}.jpg`;
 
-    // Upload to Vercel Blob
+    // Upload to Vercel Blob (using BLOB2 prefix)
     const blob = await put(filename, buffer, {
       access: 'public',
       contentType: 'image/jpeg',
+      token: process.env.BLOB2_READ_WRITE_TOKEN,
     });
 
     return res.status(200).json({
