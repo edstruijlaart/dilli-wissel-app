@@ -27,6 +27,45 @@ export default function MatchView({ state }) {
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
+  const wakeLockRef = useRef(null);
+
+  // Wake Lock: voorkom schermvergrendeling tijdens wedstrijd
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if (!isRunning || isPaused || halfBreak) {
+        // Release wake lock als wedstrijd niet loopt
+        if (wakeLockRef.current) {
+          try {
+            await wakeLockRef.current.release();
+            wakeLockRef.current = null;
+          } catch (err) {
+            console.log('Wake lock release error:', err);
+          }
+        }
+        return;
+      }
+
+      // Activeer wake lock tijdens wedstrijd
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          console.log('Wake lock activated - scherm blijft aan');
+        } catch (err) {
+          console.log('Wake lock failed:', err);
+        }
+      }
+    };
+
+    requestWakeLock();
+
+    // Cleanup bij unmount
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, [isRunning, isPaused, halfBreak]);
 
   useEffect(() => {
     if (!isOnline || !matchCode) return;

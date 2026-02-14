@@ -49,6 +49,7 @@ export function useMatchState() {
   const intervalRef = useRef(null);
   const alertShownRef = useRef(false);
   const syncTimeoutRef = useRef(null);
+  const timerStartRef = useRef(null); // Timestamp wanneer timer start
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -173,22 +174,42 @@ export function useMatchState() {
 
   const startTimer = () => {
     playWhistle();
+    timerStartRef.current = Date.now() - (matchTimer * 1000); // Start vanaf huidige tijd
     setIsRunning(true);
     setIsPaused(false);
     addEvent({ type: 'match_start', time: '0:00', half: 1 });
   };
 
-  // Timer tick
+  // Timer tick - timestamp-based voor accuracy
   useEffect(() => {
     if (isRunning && !isPaused && !halfBreak) {
+      // Sla huidige staat op bij pause/resume
+      if (!timerStartRef.current) {
+        timerStartRef.current = Date.now() - (matchTimer * 1000);
+      }
+
       intervalRef.current = setInterval(() => {
-        setMatchTimer(p => p + 1);
-        setSubTimer(p => p + 1);
-        setOnField(cf => { setPlayTime(prev => { const n = { ...prev }; cf.forEach(p => (n[p] = (n[p] || 0) + 1)); return n; }); return cf; });
+        // Bereken tijd vanaf timestamp (beschermt tegen schermvergrendeling)
+        const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
+        const prevMatchTimer = matchTimer;
+
+        setMatchTimer(elapsed);
+        setSubTimer(prev => prev + (elapsed - prevMatchTimer));
+        setOnField(cf => {
+          setPlayTime(prev => {
+            const n = { ...prev };
+            cf.forEach(p => (n[p] = (n[p] || 0) + (elapsed - prevMatchTimer)));
+            return n;
+          });
+          return cf;
+        });
       }, 1000);
+    } else {
+      // Reset timestamp bij pauze
+      timerStartRef.current = null;
     }
     return () => clearInterval(intervalRef.current);
-  }, [isRunning, isPaused, halfBreak]);
+  }, [isRunning, isPaused, halfBreak, matchTimer]);
 
   // Periodieke sync elke 10 seconden (voor playTime updates)
   useEffect(() => {
