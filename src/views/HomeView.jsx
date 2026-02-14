@@ -231,7 +231,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
               value={coachCode}
               onChange={(e) => { setCoachCode(e.target.value); setCoachError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && verifyCoachCode()}
-              placeholder="Code (bijv. 006)"
+              placeholder="Jouw code"
               autoFocus
               autoComplete="off"
               style={{
