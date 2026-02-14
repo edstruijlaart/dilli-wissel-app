@@ -299,6 +299,16 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
             <button onClick={logout} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 12, textDecoration: "underline", cursor: "pointer", marginLeft: 8, fontFamily: "'DM Sans',sans-serif" }}>Uitloggen</button>
           </div>
         )}
+
+        {/* Versie & Ontwikkelaar */}
+        <div style={{ textAlign: "center", marginTop: 32, paddingBottom: 20 }}>
+          <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
+            Versie 3.1.0
+          </p>
+          <p style={{ fontSize: 11, color: T.textMuted }}>
+            Ontwikkeld door <strong style={{ color: T.text }}>Ears Want Music</strong>
+          </p>
+        </div>
       </div>
 
       {/* Coach code modal */}
