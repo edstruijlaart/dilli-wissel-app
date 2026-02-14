@@ -86,6 +86,10 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
     setError(null);
 
     try {
+      console.log('Uploading photo to:', '/api/match/photo/upload');
+      console.log('Match code:', matchCode);
+      console.log('Image size:', Math.round(photoData.length / 1024), 'KB');
+
       const res = await fetch('/api/match/photo/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,18 +100,29 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
         }),
       });
 
+      console.log('Response status:', res.status);
+
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Upload failed');
+        const text = await res.text();
+        console.error('Upload error response:', text);
+        let errorMsg = 'Upload failed';
+        try {
+          const data = JSON.parse(text);
+          errorMsg = data.error || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
-      const { url } = await res.json();
-      onPhotoUploaded(url);
+      const data = await res.json();
+      console.log('Upload success:', data);
+      onPhotoUploaded(data.url);
       onClose();
     } catch (err) {
       console.error('Upload error:', err);
       setError(err.message || 'Upload mislukt');
-      setStatus('captured');
+      setStatus('error');
     }
   };
 
