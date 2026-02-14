@@ -450,8 +450,8 @@ export default function MatchView({ state }) {
             onPhotoUploaded={(url) => {
               addEvent({
                 type: 'photo',
-                time: fmt(matchTimer),
-                half: currentHalf,
+                time: fmt(matchTimer || 0),
+                half: currentHalf || 1,
                 url,
               });
               setShowPhotoCapture(false);
