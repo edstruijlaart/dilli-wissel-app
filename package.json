@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@daily-co/daily-js": "^0.87.0",
     "@upstash/redis": "^1.36.2",
     "@vercel/blob": "^2.2.0",
     "@vercel/kv": "^3.0.0",

@@ -8,6 +8,7 @@ import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Icons from '../components/Icons';
 import AudioTimeline from '../components/AudioTimeline';
+import LiveAudio from '../components/LiveAudio';
 
 export default function ViewerView({ code, onBack }) {
   const { match, events, error, loading, getElapsed, getSubElapsed } = useMatchPolling(code);
@@ -149,6 +150,11 @@ export default function ViewerView({ code, onBack }) {
             <div style={{ ...mono, fontSize: 40, fontWeight: 800, color: T.text }}>{match.awayScore}</div>
           </div>
         </div>
+
+        {/* Live Audio Streaming */}
+        {match.isRunning && !match.halfBreak && (
+          <LiveAudio matchCode={code} isCoach={false} onError={(err) => console.error('Live audio error:', err)} />
+        )}
 
         {/* Audio Timeline - Coach Updates */}
         <AudioTimeline matchCode={code} />

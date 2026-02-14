@@ -8,6 +8,7 @@ import Badge from '../components/Badge';
 import DilliLogo from '../components/DilliLogo';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
+import LiveAudio from '../components/LiveAudio';
 import { VIEWS } from '../hooks/useMatchState';
 
 export default function MatchView({ state }) {
@@ -200,6 +201,11 @@ export default function MatchView({ state }) {
 
         {/* Audio Timeline - Coach Updates */}
         {isOnline && matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} key={audioRefresh} />}
+
+        {/* Live Audio Streaming */}
+        {isOnline && matchCode && isRunning && !halfBreak && (
+          <LiveAudio matchCode={matchCode} isCoach={true} onError={(err) => console.error('Live audio error:', err)} />
+        )}
 
         {/* Audio Update Button */}
         {isOnline && matchCode && isRunning && !halfBreak && (
