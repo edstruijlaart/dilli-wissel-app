@@ -181,7 +181,7 @@ export default function MatchView({ state }) {
         </div>
 
         {/* Audio Timeline - Coach Updates */}
-        {isOnline && matchCode && <AudioTimeline matchCode={matchCode} key={audioRefresh} />}
+        {isOnline && matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} key={audioRefresh} />}
 
         {/* Audio Update Button */}
         {isOnline && matchCode && isRunning && !halfBreak && (

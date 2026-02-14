@@ -123,6 +123,45 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     return status;
   };
 
+  const shareMatch = async (match, e) => {
+    e.stopPropagation(); // Voorkom match click
+    const url = `${window.location.origin}?join=${match.code}`;
+    const text = `Kijk live mee: ${match.homeTeam} - ${match.awayTeam}\n${url}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ text, url });
+      } catch (err) {
+        // User cancelled of not supported
+        copyToClipboard(url);
+      }
+    } else {
+      copyToClipboard(url);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Link gekopieerd!');
+      }).catch(() => {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  const fallbackCopy = (text) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    alert('Link gekopieerd!');
+  };
+
   return (
     <div style={{ ...base, display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
       <DilliLogo size={80} />
@@ -149,46 +188,81 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
               <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
             </div>
             {liveMatches.map((match) => (
-              <button
-                key={match.code}
-                onClick={() => handleMatchClick(match)}
-                style={{
-                  ...card,
-                  padding: 16,
-                  textAlign: "left",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  cursor: "pointer",
-                  border: "none",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
-                    {match.homeTeam} - {match.awayTeam}
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted }}>
-                    {statusText(match.status)}
-                  </span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 24, fontWeight: 800, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
-                    {match.homeScore} - {match.awayScore}
-                  </span>
-                  <span style={{ fontSize: 11, color: T.textMuted }}>
-                    {match.viewers > 0 ? `👀 ${match.viewers} kijker${match.viewers !== 1 ? 's' : ''}` : ''}
-                  </span>
-                </div>
-              </button>
+              <div key={match.code} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => handleMatchClick(match)}
+                  style={{
+                    ...card,
+                    padding: 16,
+                    textAlign: "left",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    cursor: "pointer",
+                    border: "none",
+                    transition: "transform 0.2s, box-shadow 0.2s",
+                    width: '100%',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+                      {match.homeTeam} - {match.awayTeam}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted }}>
+                      {statusText(match.status)}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
+                      {match.homeScore} - {match.awayScore}
+                    </span>
+                    <span style={{ fontSize: 11, color: T.textMuted }}>
+                      {match.viewers > 0 ? `👀 ${match.viewers} kijker${match.viewers !== 1 ? 's' : ''}` : ''}
+                    </span>
+                  </div>
+                </button>
+                {/* Share button */}
+                <button
+                  onClick={(e) => shareMatch(match, e)}
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    background: T.glass,
+                    border: `1px solid ${T.glassBorder}`,
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: T.accent,
+                    transition: 'all 0.2s',
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = T.accentDim;
+                    e.currentTarget.style.borderColor = T.accent;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = T.glass;
+                    e.currentTarget.style.borderColor = T.glassBorder;
+                  }}
+                >
+                  {Icons.share(14, T.accent)}
+                  Deel
+                </button>
+              </div>
             ))}
           </>
         ) : null}

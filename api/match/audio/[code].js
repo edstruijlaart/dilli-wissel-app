@@ -1,4 +1,4 @@
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
 export const config = {
   api: {
@@ -23,8 +23,8 @@ export default async function handler(req, res) {
         ...parseAudioMetadata(blob.pathname),
       }));
 
-      // Sort by timestamp (oldest first)
-      audioMessages.sort((a, b) => (a.matchTime || 0) - (b.matchTime || 0));
+      // Sort by timestamp (newest first)
+      audioMessages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
       return res.status(200).json({ messages: audioMessages });
     } catch (err) {
@@ -63,6 +63,22 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error('Upload audio error:', err);
       return res.status(500).json({ error: 'Failed to upload audio' });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    // Delete audio message by URL
+    try {
+      const { url } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: 'URL required' });
+      }
+
+      await del(url);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('Delete audio error:', err);
+      return res.status(500).json({ error: 'Failed to delete audio' });
     }
   }
 
