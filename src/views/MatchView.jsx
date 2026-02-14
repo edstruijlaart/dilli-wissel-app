@@ -5,6 +5,7 @@ import { fireConfetti } from '../utils/confetti';
 import { vibrate } from '../utils/audio';
 import Icons from '../components/Icons';
 import Badge from '../components/Badge';
+import DilliLogo from '../components/DilliLogo';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
 import { VIEWS } from '../hooks/useMatchState';
@@ -13,7 +14,7 @@ export default function MatchView({ state }) {
   const {
     halfDuration, halves, subInterval, currentHalf, matchTimer, subTimer,
     isRunning, isPaused, setIsPaused, showSubAlert, suggestedSubs,
-    halfBreak, manualSubMode, setManualSubMode, matchKeeper,
+    halfBreak, injuryTime, manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
@@ -103,10 +104,16 @@ export default function MatchView({ state }) {
   const sr = subInterval * 60 - subTimer;
   const hp = (he / hs) * 100;
   const urgent = sr <= 30 && onBench.length > 0 && !showSubAlert;
+  const injuryTimeElapsed = injuryTime ? he - hs : 0;
 
   return (
     <div style={base}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+        {/* Club logo */}
+        <div style={{ marginBottom: 12 }}>
+          <DilliLogo size={32} />
+        </div>
+
         {/* Online indicator */}
         {isOnline && matchCode && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -131,8 +138,12 @@ export default function MatchView({ state }) {
               <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1 }}>{currentHalf}<span style={{ color: T.textMuted, fontSize: 20 }}>/{halves}</span></div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Tijd</div>
-              <div style={{ ...mono, fontSize: 32, fontWeight: 700, lineHeight: 1 }}>{fmt(matchTimer)}</div>
+              <div style={{ fontSize: 11, color: injuryTime ? T.warn : T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>
+                {injuryTime ? "Blessuretijd" : "Tijd"}
+              </div>
+              <div style={{ ...mono, fontSize: 32, fontWeight: 700, lineHeight: 1, color: injuryTime ? T.warn : T.text }}>
+                {injuryTime ? fmt(injuryTimeElapsed) : fmt(matchTimer)}
+              </div>
             </div>
           </div>
           <div style={{ height: 4, background: T.glass, borderRadius: 2, marginBottom: 12, overflow: "hidden" }}>

@@ -145,7 +145,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
   const shareMatch = async (match, e) => {
     e.stopPropagation(); // Voorkom match click
     const url = `${window.location.origin}?join=${match.code}`;
-    const text = `Kijk live mee: ${match.homeTeam} - ${match.awayTeam}\n${url}`;
+    const text = `Kijk live mee met de wedstrijd!\n${match.homeTeam} - ${match.awayTeam}\n\nKlik op deze link:\n${url}`;
 
     if (navigator.share) {
       try {

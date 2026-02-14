@@ -25,6 +25,7 @@ export function useMatchState() {
   const [suggestedSubs, setSuggestedSubs] = useState({ out: [], inn: [] });
   const [subHistory, setSubHistory] = useState([]);
   const [halfBreak, setHalfBreak] = useState(false);
+  const [injuryTime, setInjuryTime] = useState(false);
   const [manualSubMode, setManualSubMode] = useState(null);
   const [showPaste, setShowPaste] = useState(false);
   const [clipboardNames, setClipboardNames] = useState([]);
@@ -225,8 +226,20 @@ export function useMatchState() {
     if (!isRunning || isPaused || halfBreak) return;
     const hs = halfDuration * 60;
     const he = matchTimer - (currentHalf - 1) * hs;
-    if (he >= hs) {
+    const maxInjuryTime = 5 * 60; // 5 minuten blessuretijd
+
+    // Blessuretijd: tussen hs en hs + 5 min
+    if (he >= hs && he < hs + maxInjuryTime) {
+      if (!injuryTime) {
+        setInjuryTime(true);
+        addEvent({ type: 'injury_time_start', time: fmt(matchTimer), half: currentHalf });
+      }
+    }
+
+    // Stop na maximale tijd (regulier + 5 min blessuretijd)
+    if (he >= hs + maxInjuryTime) {
       clearInterval(intervalRef.current);
+      setInjuryTime(false);
       if (currentHalf < halves) {
         setHalfBreak(true); setShowSubAlert(false); notifyHalf();
         addEvent({ type: 'half_end', time: fmt(matchTimer), half: currentHalf });
@@ -267,7 +280,7 @@ export function useMatchState() {
   };
 
   const startNextHalf = () => {
-    setCurrentHalf(p => p + 1); setHalfBreak(false); setSubTimer(0); alertShownRef.current = false;
+    setCurrentHalf(p => p + 1); setHalfBreak(false); setInjuryTime(false); setSubTimer(0); alertShownRef.current = false;
     addEvent({ type: 'half_start', time: fmt(matchTimer), half: currentHalf + 1 });
     if (onBench.length > 0) { setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper)); setShowSubAlert(true); notifySub(); }
   };
@@ -385,7 +398,7 @@ export function useMatchState() {
     // Match state
     view, setView, onField, onBench, playTime, currentHalf,
     matchTimer, subTimer, isRunning, isPaused, setIsPaused,
-    showSubAlert, suggestedSubs, subHistory, halfBreak,
+    showSubAlert, suggestedSubs, subHistory, halfBreak, injuryTime,
     manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
     homeScore, setHomeScore, awayScore, setAwayScore, goalScorers, setGoalScorers,
