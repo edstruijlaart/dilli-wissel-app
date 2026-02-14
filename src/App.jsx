@@ -114,6 +114,15 @@ export default function App() {
     window.history.pushState(null, '', `/join/${code.toUpperCase()}`);
   };
 
+  const handleJoinAsCoach = async (code) => {
+    const success = await state.reconnectToMatch(code.toUpperCase());
+    if (success) {
+      setMode(MODES.MATCH);
+      saveSession(code.toUpperCase(), MODES.MATCH);
+    }
+    return success;
+  };
+
   const handleSetupDone = async () => {
     // Start de wedstrijd (zet state.view naar MATCH)
     state.startMatch();
@@ -167,6 +176,7 @@ export default function App() {
           onStartOnline={handleStartOnline}
           onStartLocal={handleStartLocal}
           onJoin={handleJoin}
+          onJoinAsCoach={handleJoinAsCoach}
         />
       )}
       {mode === MODES.SETUP && (

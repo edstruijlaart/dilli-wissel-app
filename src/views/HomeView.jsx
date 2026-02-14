@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { T, base, card, btnP, btnS } from '../theme';
 import DilliLogo from '../components/DilliLogo';
 import Icons from '../components/Icons';
 
-export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
+export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAsCoach }) {
+  const [liveMatches, setLiveMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMatch, setSelectedMatch] = useState(null);
   const [joinCode, setJoinCode] = useState('');
   const [showCoachCode, setShowCoachCode] = useState(false);
   const [coachCode, setCoachCode] = useState('');
@@ -13,9 +16,43 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
     try { return JSON.parse(localStorage.getItem('dilli_coach'))?.team || null; } catch { return null; }
   });
 
+  // Haal live wedstrijden op
+  useEffect(() => {
+    fetchLiveMatches();
+    const interval = setInterval(fetchLiveMatches, 5000); // Poll elke 5s
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchLiveMatches = async () => {
+    try {
+      const res = await fetch('/api/match/live');
+      const data = await res.json();
+      setLiveMatches(data.matches || []);
+    } catch (err) {
+      console.error('Failed to fetch live matches:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('dilli_coach');
     setLoggedInTeam(null);
+  };
+
+  const handleMatchClick = (match) => {
+    setSelectedMatch(match);
+    setShowCoachCode(true);
+    setCoachCode('');
+    setCoachError('');
+  };
+
+  const handleSkipToViewer = () => {
+    if (selectedMatch) {
+      onJoin(selectedMatch.code);
+      setShowCoachCode(false);
+      setSelectedMatch(null);
+    }
   };
 
   const handleJoinInput = (e) => {
@@ -56,7 +93,19 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
         localStorage.setItem('dilli_coach', JSON.stringify(teamData));
         setLoggedInTeam(teamData.team);
         setShowCoachCode(false);
-        onStartOnline(teamData);
+
+        // Als we een wedstrijd geselecteerd hebben → join als coach
+        if (selectedMatch && onJoinAsCoach) {
+          const success = await onJoinAsCoach(selectedMatch.code);
+          if (!success) {
+            setCoachError('Wedstrijd niet gevonden');
+            setShowCoachCode(true);
+          }
+          setSelectedMatch(null);
+        } else {
+          // Anders nieuwe wedstrijd starten
+          onStartOnline(teamData);
+        }
       } else {
         setCoachError('Ongeldige code');
       }
@@ -66,54 +115,89 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
     setChecking(false);
   };
 
+  const statusText = (status) => {
+    if (status === 'live') return '🟢 Live';
+    if (status === 'paused') return '⏸️ Gepauzeerd';
+    if (status === 'halftime') return '☕ Rust';
+    if (status === 'setup') return '⏱️ Setup';
+    return status;
+  };
+
   return (
     <div style={{ ...base, display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
       <DilliLogo size={80} />
       <h1 style={{ fontSize: 22, fontWeight: 800, marginTop: 16, marginBottom: 4, color: T.text }}>Dilli Wissel</h1>
       <p style={{ fontSize: 13, color: T.textDim, marginBottom: 32 }}>v.v. Dilettant wisselmanager</p>
 
-      <div style={{ width: "100%", maxWidth: 360, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ width: "100%", maxWidth: 500, display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Wedstrijd starten */}
         <button onClick={handleStartOnline} style={{ ...btnP, padding: "16px 24px", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%" }}>
           {Icons.football(22, "#FFF")}
-          Wedstrijd starten
+          Nieuwe wedstrijd starten
         </button>
 
+        {/* Live wedstrijden */}
+        {loading ? (
+          <div style={{ ...card, padding: 20, textAlign: "center" }}>
+            <p style={{ fontSize: 13, color: T.textDim }}>Wedstrijden laden...</p>
+          </div>
+        ) : liveMatches.length > 0 ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0" }}>
+              <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
+              <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>LIVE WEDSTRIJDEN</span>
+              <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
+            </div>
+            {liveMatches.map((match) => (
+              <button
+                key={match.code}
+                onClick={() => handleMatchClick(match)}
+                style={{
+                  ...card,
+                  padding: 16,
+                  textAlign: "left",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  cursor: "pointer",
+                  border: "none",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)";
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+                    {match.homeTeam} - {match.awayTeam}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.textMuted }}>
+                    {statusText(match.status)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
+                    {match.homeScore} - {match.awayScore}
+                  </span>
+                  <span style={{ fontSize: 11, color: T.textMuted }}>
+                    {match.viewers > 0 ? `👀 ${match.viewers} kijker${match.viewers !== 1 ? 's' : ''}` : ''}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </>
+        ) : null}
+
         {/* Lokaal (zonder delen) */}
-        <button onClick={onStartLocal} style={{ ...btnS, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%" }}>
+        <button onClick={onStartLocal} style={{ ...btnS, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: liveMatches.length > 0 ? 8 : 0 }}>
           {Icons.timer(18)}
           Alleen voor mezelf (offline)
         </button>
-
-        {/* Scheidingslijn */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "8px 0" }}>
-          <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
-          <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>OF MEEKIJKEN</span>
-          <div style={{ flex: 1, height: 1, background: T.glassBorder }} />
-        </div>
-
-        {/* Code invoeren */}
-        <div style={{ ...card, padding: 20, textAlign: "center" }}>
-          <p style={{ fontSize: 13, color: T.textDim, marginBottom: 12 }}>Heb je een code gekregen?</p>
-          <input
-            type="text"
-            value={joinCode}
-            onChange={handleJoinInput}
-            placeholder="XXXX"
-            maxLength={4}
-            autoComplete="off"
-            autoCapitalize="characters"
-            style={{
-              width: "100%", maxWidth: 180, textAlign: "center", fontSize: 32, fontWeight: 800,
-              letterSpacing: 8, padding: "12px 16px", border: `2px solid ${T.glassBorder}`,
-              borderRadius: 14, outline: "none", fontFamily: "'JetBrains Mono',monospace",
-              color: T.text, background: T.glass, transition: "border-color 0.2s",
-            }}
-            onFocus={(e) => e.target.style.borderColor = T.accent}
-            onBlur={(e) => e.target.style.borderColor = T.glassBorder}
-          />
-          <p style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>Voer de 4-letter code in om mee te kijken</p>
-        </div>
 
         {/* Ingelogd als / uitloggen */}
         {loggedInTeam && (
@@ -127,16 +211,27 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
       {/* Coach code modal */}
       {showCoachCode && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
-          <div style={{ ...card, padding: 28, width: "100%", maxWidth: 320, textAlign: "center" }}>
+          <div style={{ ...card, padding: 28, width: "100%", maxWidth: 360, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>Coachcode</h3>
-            <p style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>Voer je coachcode in om een wedstrijd te starten</p>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 4 }}>
+              {selectedMatch ? 'Ben je coach?' : 'Coachcode'}
+            </h3>
+            {selectedMatch && (
+              <p style={{ fontSize: 13, color: T.text, fontWeight: 600, marginBottom: 8 }}>
+                {selectedMatch.homeTeam} - {selectedMatch.awayTeam}
+              </p>
+            )}
+            <p style={{ fontSize: 12, color: T.textDim, marginBottom: 16 }}>
+              {selectedMatch
+                ? 'Voer de coach code in om wissels te kunnen doen'
+                : 'Voer je coachcode in om een wedstrijd te starten'}
+            </p>
             <input
               type="text"
               value={coachCode}
               onChange={(e) => { setCoachCode(e.target.value); setCoachError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && verifyCoachCode()}
-              placeholder="Code"
+              placeholder="Code (bijv. 006)"
               autoFocus
               autoComplete="off"
               style={{
@@ -148,11 +243,39 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin }) {
             />
             {coachError && <p style={{ fontSize: 12, color: T.danger, marginTop: 8, fontWeight: 600 }}>{coachError}</p>}
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button onClick={() => setShowCoachCode(false)} style={{ ...btnS, flex: 1, padding: "12px 16px" }}>Annuleren</button>
-              <button onClick={verifyCoachCode} disabled={checking || !coachCode.trim()} style={{ ...btnP, flex: 1, padding: "12px 16px", opacity: checking || !coachCode.trim() ? 0.5 : 1 }}>
-                {checking ? 'Checken...' : 'Start'}
+              <button
+                onClick={() => { setShowCoachCode(false); setSelectedMatch(null); }}
+                style={{ ...btnS, flex: 1, padding: "12px 16px" }}
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={verifyCoachCode}
+                disabled={checking || !coachCode.trim()}
+                style={{ ...btnP, flex: 1, padding: "12px 16px", opacity: checking || !coachCode.trim() ? 0.5 : 1 }}
+              >
+                {checking ? 'Checken...' : 'Bevestig'}
               </button>
             </div>
+            {selectedMatch && (
+              <button
+                onClick={handleSkipToViewer}
+                style={{
+                  ...btnS,
+                  width: "100%",
+                  padding: "12px 16px",
+                  marginTop: 8,
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+              >
+                {Icons.eye(16)}
+                Als toeschouwer meekijken
+              </button>
+            )}
           </div>
         </div>
       )}
