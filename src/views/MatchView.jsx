@@ -9,6 +9,7 @@ import DilliLogo from '../components/DilliLogo';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
 import LiveAudio from '../components/LiveAudio';
+import PhotoCapture from '../components/PhotoCapture';
 import { VIEWS } from '../hooks/useMatchState';
 
 export default function MatchView({ state }) {
@@ -28,6 +29,7 @@ export default function MatchView({ state }) {
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [liveAudioError, setLiveAudioError] = useState(null);
+  const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
   const wakeLockRef = useRef(null);
@@ -214,12 +216,18 @@ export default function MatchView({ state }) {
           </>
         )}
 
-        {/* Audio Update Button */}
+        {/* Audio & Photo Buttons */}
         {isOnline && matchCode && isRunning && !halfBreak && (
-          <button onClick={() => setShowAudioRecorder(true)} style={{ ...btnS, width: "100%", padding: "12px 0", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderColor: T.accentDim, color: T.accent }}>
-            {Icons.microphone(16, T.accent)}
-            Audio update
-          </button>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <button onClick={() => setShowAudioRecorder(true)} style={{ ...btnS, flex: 1, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderColor: T.accentDim, color: T.accent }}>
+              {Icons.microphone(16, T.accent)}
+              Audio
+            </button>
+            <button onClick={() => setShowPhotoCapture(true)} style={{ ...btnS, flex: 1, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, borderColor: T.accentDim, color: T.accent }}>
+              {Icons.camera(16, T.accent)}
+              Foto
+            </button>
+          </div>
         )}
 
         {/* Keeper picker */}
@@ -430,6 +438,23 @@ export default function MatchView({ state }) {
             onUploaded={() => {
               setShowAudioRecorder(false);
               setAudioRefresh(prev => prev + 1);
+            }}
+          />
+        )}
+
+        {/* Photo Capture */}
+        {showPhotoCapture && (
+          <PhotoCapture
+            matchCode={matchCode}
+            onClose={() => setShowPhotoCapture(false)}
+            onPhotoUploaded={(url) => {
+              addEvent({
+                type: 'photo',
+                time: fmt(matchTimer),
+                half: currentHalf,
+                url,
+              });
+              setShowPhotoCapture(false);
             }}
           />
         )}

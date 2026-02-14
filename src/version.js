@@ -1,2 +1,2 @@
 // App version - update bij elke release
-export const VERSION = '3.2.7';
+export const VERSION = '3.3.0';

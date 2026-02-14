@@ -15,6 +15,7 @@ export default function ViewerView({ code, onBack }) {
   const [timer, setTimer] = useState(0);
   const [goalToast, setGoalToast] = useState(null);
   const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
+  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
   const prevEventsLen = useRef(-1); // -1 = nog niet geïnitialiseerd
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
@@ -207,10 +208,58 @@ export default function ViewerView({ code, onBack }) {
               {[...events].reverse().slice(0, 20).map((ev, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textDim }}>
                   <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 40 }}>{ev.time || ''}</span>
-                  <span>{formatEvent(ev)}</span>
+                  {ev.type === 'photo' ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                      <span>{formatEvent(ev)}</span>
+                      <img
+                        src={ev.url}
+                        alt="Wedstrijd foto"
+                        onClick={() => setFullscreenPhoto(ev.url)}
+                        style={{
+                          width: 60,
+                          height: 60,
+                          objectFit: 'cover',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          border: `2px solid ${T.glassBorder}`,
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span>{formatEvent(ev)}</span>
+                  )}
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Fullscreen photo viewer */}
+        {fullscreenPhoto && (
+          <div
+            onClick={() => setFullscreenPhoto(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.95)',
+              zIndex: 10000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+              cursor: 'pointer',
+            }}
+          >
+            <img
+              src={fullscreenPhoto}
+              alt="Wedstrijd foto"
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+                borderRadius: 12,
+              }}
+            />
           </div>
         )}
       </div>
@@ -447,6 +496,7 @@ function formatEvent(ev) {
     case 'sub_auto': return `Wissel: ${(ev.out || []).join(', ')} eruit → ${(ev.inn || []).join(', ')} erin`;
     case 'sub_manual': return `Handmatige wissel: ${(ev.out || []).join(', ')} ↔ ${(ev.inn || []).join(', ')}`;
     case 'keeper_change': return `Nieuwe keeper: ${ev.newKeeper}`;
+    case 'photo': return '📷 Foto toegevoegd';
     case 'match_end': return 'Wedstrijd afgelopen';
     default: return ev.type;
   }
