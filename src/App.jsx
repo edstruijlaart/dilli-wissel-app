@@ -3,19 +3,18 @@ import { useMatchState, VIEWS } from './hooks/useMatchState';
 import { globalStyles } from './theme';
 import HomeView from './views/HomeView';
 import SetupView from './views/SetupView';
-import ShareView from './views/ShareView';
 import MatchView from './views/MatchView';
 import SummaryView from './views/SummaryView';
 import ViewerView from './views/ViewerView';
 import AdminView from './views/AdminView';
 
-// App modes: HOME → SETUP → (SHARE) → MATCH → SUMMARY  |  VIEWER | ADMIN
-const MODES = { HOME: 'home', SETUP: 'setup', SHARE: 'share', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer', ADMIN: 'admin' };
+// App modes: HOME → SETUP → MATCH → SUMMARY  |  VIEWER | ADMIN
+const MODES = { HOME: 'home', SETUP: 'setup', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer', ADMIN: 'admin' };
 
 const SESSION_KEY = 'dilli_active_match';
 
 function saveSession(matchCode, mode) {
-  if (matchCode && (mode === MODES.MATCH || mode === MODES.SHARE || mode === MODES.SUMMARY)) {
+  if (matchCode && (mode === MODES.MATCH || mode === MODES.SUMMARY)) {
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({ matchCode, mode }));
   }
 }
@@ -128,23 +127,13 @@ export default function App() {
     // Start de wedstrijd (zet state.view naar MATCH)
     state.startMatch();
     if (state.isOnline) {
-      // Online: eerst wedstrijd aanmaken op server, dan share scherm tonen
+      // Online: wedstrijd aanmaken op server, direct naar match
       const code = await state.createOnlineMatch();
-      if (code) {
-        setMode(MODES.SHARE);
-        saveSession(code, MODES.SHARE);
-      } else {
-        // Fallback: gewoon door naar match (offline)
-        setMode(MODES.MATCH);
-      }
+      setMode(MODES.MATCH);
+      saveSession(code || state.matchCode, MODES.MATCH);
     } else {
       setMode(MODES.MATCH);
     }
-  };
-
-  const handleShareContinue = () => {
-    setMode(MODES.MATCH);
-    saveSession(state.matchCode, MODES.MATCH);
   };
 
   const handleNewMatch = () => {
@@ -182,9 +171,6 @@ export default function App() {
       )}
       {mode === MODES.SETUP && (
         <SetupView state={state} onStartMatch={handleSetupDone} />
-      )}
-      {mode === MODES.SHARE && (
-        <ShareView code={state.matchCode} onContinue={handleShareContinue} />
       )}
       {mode === MODES.MATCH && (
         <MatchView state={state} />
