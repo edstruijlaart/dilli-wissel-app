@@ -21,7 +21,7 @@ export default function MatchView({ state }) {
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
-    matchCode, isOnline, syncError, startTimer, coachName,
+    matchCode, isOnline, syncError, startTimer, coachName, addEvent,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
