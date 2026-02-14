@@ -110,15 +110,11 @@ export default function MatchView({ state }) {
   return (
     <div style={base}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
-        {/* Club logo */}
-        <div style={{ marginBottom: 12 }}>
-          <DilliLogo size={32} />
-        </div>
-
-        {/* Online indicator */}
+        {/* Online indicator + logo */}
         {isOnline && matchCode && (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: syncError ? T.danger : T.textMuted }}>
+              <DilliLogo size={20} />
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
               {syncError || `Live · Code: ${matchCode}`}
               {viewers > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4 }}>{Icons.eye(12, T.textMuted)} {viewers}</span>}
