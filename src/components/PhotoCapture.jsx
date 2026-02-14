@@ -53,16 +53,35 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    // Set canvas size to video dimensions
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Max dimensions for upload (keep reasonable size)
+    const MAX_WIDTH = 1920;
+    const MAX_HEIGHT = 1080;
 
-    // Draw video frame to canvas
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+
+    // Scale down if needed
+    if (width > MAX_WIDTH) {
+      height = (height * MAX_WIDTH) / width;
+      width = MAX_WIDTH;
+    }
+    if (height > MAX_HEIGHT) {
+      width = (width * MAX_HEIGHT) / height;
+      height = MAX_HEIGHT;
+    }
+
+    // Set canvas size to scaled dimensions
+    canvas.width = width;
+    canvas.height = height;
+
+    // Draw video frame to canvas (scaled)
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, width, height);
 
-    // Convert to JPEG base64 (quality: 0.9)
-    const imageData = canvas.toDataURL('image/jpeg', 0.9);
+    // Convert to JPEG base64 (quality: 0.8 for smaller file size)
+    const imageData = canvas.toDataURL('image/jpeg', 0.8);
+    console.log('Captured photo size:', Math.round(imageData.length / 1024), 'KB');
+
     setPhotoData(imageData);
 
     // Stop camera stream
