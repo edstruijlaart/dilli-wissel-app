@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { T, card } from '../theme';
 
-export default function AudioTimeline({ matchCode, isCoach = false }) {
+export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null }) {
   const [messages, setMessages] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
     return () => clearInterval(interval);
   }, [matchCode]);
 
-  const handleDelete = async (url) => {
+  const handleDeleteAudio = async (url) => {
     if (!confirm('Audio update verwijderen?')) return;
 
     setDeleting(url);
@@ -62,13 +62,38 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
     }
   };
 
+  const handleDeletePhoto = async (url) => {
+    if (!confirm('Foto verwijderen?')) return;
+
+    setDeleting(url);
+    try {
+      const res = await fetch('/api/match/photo/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+
+      if (res.ok) {
+        setPhotos(photos.filter(photo => photo.url !== url));
+      }
+    } catch (err) {
+      console.error('Delete photo error:', err);
+      alert('Verwijderen mislukt');
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   // Combine audio + photos into single feed
   const allUpdates = [
     ...messages.map(msg => ({ ...msg, type: 'audio', timestamp: new Date(msg.timestamp || 0).getTime() })),
     ...photos.map(photo => ({ ...photo, type: 'photo', timestamp: new Date(photo.timestamp || 0).getTime() })),
   ].sort((a, b) => b.timestamp - a.timestamp); // Most recent first
 
-  if (loading || allUpdates.length === 0) return null;
+  // Apply maxItems limit (for viewers: show only latest)
+  const displayUpdates = maxItems ? allUpdates.slice(0, maxItems) : allUpdates;
+
+  if (loading || displayUpdates.length === 0) return null;
 
   return (
     <>
@@ -76,11 +101,11 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <span style={{ fontSize: 18 }}>📢</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>
-            Updates ({allUpdates.length})
+            {maxItems === 1 ? 'Laatste Update' : `Updates (${allUpdates.length})`}
           </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {allUpdates.map((item, i) => (
+          {displayUpdates.map((item, i) => (
             <div key={i} style={{ padding: '12px 14px', borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
@@ -90,9 +115,9 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
                 <span style={{ fontSize: 11, color: T.textMuted }}>
                   {item.type === 'audio' ? '🎙️ Audio' : '📷 Foto'}
                 </span>
-                {isCoach && item.type === 'audio' && (
+                {isCoach && (
                   <button
-                    onClick={() => handleDelete(item.url)}
+                    onClick={() => item.type === 'audio' ? handleDeleteAudio(item.url) : handleDeletePhoto(item.url)}
                     disabled={deleting === item.url}
                     style={{
                       marginLeft: 'auto',

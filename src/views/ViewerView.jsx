@@ -178,8 +178,8 @@ export default function ViewerView({ code, onBack }) {
           <LiveAudio matchCode={code} isCoach={false} onError={(err) => console.error('Live audio error:', err)} />
         )}
 
-        {/* Audio Timeline - Coach Updates */}
-        <AudioTimeline matchCode={code} />
+        {/* Audio Timeline - Only show latest update for viewers */}
+        <AudioTimeline matchCode={code} maxItems={1} />
 
         {/* Half break */}
         {match.halfBreak && (
