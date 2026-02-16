@@ -16,14 +16,17 @@ export default async function handler(req, res) {
         prefix: `match/${code}/audio/`,
       });
 
-      const audioMessages = blobs.map(blob => ({
-        url: blob.url,
-        uploadedAt: blob.uploadedAt,
-        // Parse metadata from pathname: match/{code}/audio/{timestamp}-{half}.webm
-        ...parseAudioMetadata(blob.pathname),
-        // Add message from blob metadata (if exists)
-        message: blob.metadata?.message || '',
-      }));
+      const audioMessages = blobs.map(blob => {
+        console.log('Blob metadata:', blob.pathname, blob.metadata);
+        return {
+          url: blob.url,
+          uploadedAt: blob.uploadedAt,
+          // Parse metadata from pathname: match/{code}/audio/{timestamp}-{half}.webm
+          ...parseAudioMetadata(blob.pathname),
+          // Add message from blob metadata (if exists)
+          message: blob.metadata?.message || '',
+        };
+      });
 
       // Sort by timestamp (newest first)
       audioMessages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -51,6 +54,9 @@ export default async function handler(req, res) {
       const message = req.headers['x-message'] ? decodeURIComponent(req.headers['x-message']) : '';
       const contentType = req.headers['content-type'] || 'audio/webm';
 
+      console.log('Upload audio - message:', message);
+      console.log('Upload audio - message length:', message.length);
+
       // Upload to Vercel Blob
       const filename = `match/${code}/audio/${Date.now()}-${matchTime.replace(':', '')}-H${half}.webm`;
       const blob = await put(filename, buffer, {
@@ -62,6 +68,8 @@ export default async function handler(req, res) {
           message,
         },
       });
+
+      console.log('Blob uploaded with metadata:', blob.url, { matchTime, half, message });
 
       return res.status(201).json({
         url: blob.url,
