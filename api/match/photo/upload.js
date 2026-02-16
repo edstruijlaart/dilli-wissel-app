@@ -18,10 +18,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { matchCode, image, timestamp } = req.body;
+  const { matchCode, image, timestamp, caption } = req.body;
   console.log('Match code:', matchCode);
   console.log('Has image:', !!image);
   console.log('Image length:', image?.length);
+  console.log('Caption:', caption);
 
   if (!matchCode || !image) {
     return res.status(400).json({ error: 'Missing matchCode or image' });
@@ -58,6 +59,9 @@ export default async function handler(req, res) {
       access: 'public',
       contentType: 'image/jpeg',
       token: process.env.BLOB2_READ_WRITE_TOKEN,
+      addMetadata: {
+        caption: caption || '',
+      },
     });
 
     console.log('Upload success:', blob.url);

@@ -13,6 +13,7 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
   const [status, setStatus] = useState('idle'); // idle | camera | captured | uploading | error
   const [photoData, setPhotoData] = useState(null); // Base64 image data
   const [error, setError] = useState(null);
+  const [caption, setCaption] = useState('');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -162,6 +163,7 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
           matchCode,
           image: photoData,
           timestamp: Date.now(),
+          caption: caption.trim(),
         }),
       });
 
@@ -182,7 +184,7 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
 
       const data = await res.json();
       console.log('Upload success:', data);
-      onPhotoUploaded(data.url);
+      onPhotoUploaded({ url: data.url, caption: caption.trim() });
       onClose();
     } catch (err) {
       console.error('Upload error:', err);
@@ -258,14 +260,34 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
         {status === 'captured' && photoData && (
           <>
             <img src={photoData} alt="Captured" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-            <div style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 12 }}>
-              <button onClick={retake} style={{ ...btnS, padding: '12px 24px', fontSize: 14, background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: '#FFF' }}>
-                Opnieuw
-              </button>
-              <button onClick={uploadPhoto} style={{ ...btnP, padding: '12px 32px', fontSize: 14 }}>
-                {Icons.check(16, '#FFF')}
-                <span style={{ marginLeft: 6 }}>Gebruik foto</span>
-              </button>
+            <div style={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: 12, width: 'calc(100% - 40px)', maxWidth: 400 }}>
+              <input
+                type="text"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Optioneel: beschrijving (bijv. 'Assist van Luuk')"
+                maxLength={80}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.95)',
+                  fontSize: 13,
+                  color: '#000',
+                  fontFamily: "'DM Sans',sans-serif",
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={retake} style={{ ...btnS, flex: 1, padding: '12px 24px', fontSize: 14, background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: '#FFF' }}>
+                  Opnieuw
+                </button>
+                <button onClick={uploadPhoto} style={{ ...btnP, flex: 1, padding: '12px 32px', fontSize: 14 }}>
+                  {Icons.check(16, '#FFF')}
+                  <span style={{ marginLeft: 6 }}>Gebruik foto</span>
+                </button>
+              </div>
             </div>
           </>
         )}

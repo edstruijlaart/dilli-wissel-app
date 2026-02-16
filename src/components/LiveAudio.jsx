@@ -63,7 +63,11 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
       newRoom
         .on(RoomEvent.Connected, () => {
           console.log('Connected to LiveKit room');
-          setStatus('connected');
+          // For coach: immediately show as connected
+          // For viewer: wait for audio tracks (checking status)
+          if (isCoach) {
+            setStatus('connected');
+          }
           updateParticipantCount(newRoom);
         })
         .on(RoomEvent.ParticipantConnected, () => {
@@ -91,6 +95,8 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
               clearTimeout(streamCheckTimeoutRef.current);
               streamCheckTimeoutRef.current = null;
             }
+            // Now we can safely show as connected (we have audio!)
+            setStatus('connected');
             const audioElement = track.attach();
             audioElement.play().catch(err => console.error('Audio autoplay failed:', err));
           }

@@ -7,6 +7,7 @@ export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClo
   const [duration, setDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState(null);
   const [error, setError] = useState(null);
+  const [message, setMessage] = useState('');
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -68,6 +69,7 @@ export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClo
           'Content-Type': 'audio/webm',
           'X-Match-Time': matchTime,
           'X-Half': currentHalf.toString(),
+          'X-Message': encodeURIComponent(message.trim() || ''),
         },
         body: blob,
       });
@@ -124,9 +126,30 @@ export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClo
 
         {state === 'stopped' && audioUrl && (
           <div style={{ marginBottom: 20 }}>
-            <audio src={audioUrl} controls style={{ width: '100%', marginBottom: 8 }} />
-            <div style={{ textAlign: 'center', fontSize: 12, color: T.textDim }}>
+            <audio src={audioUrl} controls style={{ width: '100%', marginBottom: 12 }} />
+            <div style={{ textAlign: 'center', fontSize: 12, color: T.textDim, marginBottom: 12 }}>
               Duur: {formatDuration(duration)} · {matchTime} (H{currentHalf})
+            </div>
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Optioneel: kort bericht (bijv. 'Het is rust')"
+              maxLength={60}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: `1px solid ${T.glassBorder}`,
+                background: T.glass,
+                fontSize: 13,
+                color: T.text,
+                fontFamily: "'DM Sans',sans-serif",
+                outline: 'none',
+              }}
+            />
+            <div style={{ textAlign: 'right', fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+              {message.length}/60
             </div>
           </div>
         )}

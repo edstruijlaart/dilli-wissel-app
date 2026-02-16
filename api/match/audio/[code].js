@@ -21,6 +21,8 @@ export default async function handler(req, res) {
         uploadedAt: blob.uploadedAt,
         // Parse metadata from pathname: match/{code}/audio/{timestamp}-{half}.webm
         ...parseAudioMetadata(blob.pathname),
+        // Add message from blob metadata (if exists)
+        message: blob.metadata?.message || '',
       }));
 
       // Sort by timestamp (newest first)
@@ -46,6 +48,7 @@ export default async function handler(req, res) {
       // Get metadata from headers
       const matchTime = req.headers['x-match-time'] || '0';
       const half = req.headers['x-half'] || '1';
+      const message = req.headers['x-message'] ? decodeURIComponent(req.headers['x-message']) : '';
       const contentType = req.headers['content-type'] || 'audio/webm';
 
       // Upload to Vercel Blob
@@ -53,12 +56,18 @@ export default async function handler(req, res) {
       const blob = await put(filename, buffer, {
         access: 'public',
         contentType,
+        addMetadata: {
+          matchTime,
+          half,
+          message,
+        },
       });
 
       return res.status(201).json({
         url: blob.url,
         matchTime,
         half,
+        message,
       });
     } catch (err) {
       console.error('Upload audio error:', err);

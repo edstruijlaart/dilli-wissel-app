@@ -21,10 +21,11 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
         }
 
         // Fetch events (for photos)
-        const eventsRes = await fetch(`/api/match/${matchCode}/events`);
+        const eventsRes = await fetch(`/api/match/events/${matchCode}`);
         if (eventsRes.ok) {
           const eventsData = await eventsRes.json();
-          const photoEvents = (eventsData.events || []).filter(ev => ev.type === 'photo');
+          // eventsData is the array directly, not { events: [...] }
+          const photoEvents = Array.isArray(eventsData) ? eventsData.filter(ev => ev.type === 'photo') : [];
           setPhotos(photoEvents);
         }
       } catch (err) {
@@ -110,20 +111,34 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
                 )}
               </div>
               {item.type === 'audio' ? (
-                <audio src={item.url} controls style={{ width: '100%', height: 32 }} />
+                <>
+                  {item.message && (
+                    <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontStyle: 'italic' }}>
+                      "{item.message}"
+                    </p>
+                  )}
+                  <audio src={item.url} controls style={{ width: '100%', height: 32 }} />
+                </>
               ) : (
-                <img
-                  src={item.url}
-                  alt="Wedstrijd foto"
-                  onClick={() => setFullscreenPhoto(item.url)}
-                  style={{
-                    width: '100%',
-                    maxHeight: 200,
-                    objectFit: 'cover',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                  }}
-                />
+                <>
+                  {item.caption && (
+                    <p style={{ fontSize: 13, color: T.text, marginBottom: 8, fontStyle: 'italic' }}>
+                      "{item.caption}"
+                    </p>
+                  )}
+                  <img
+                    src={item.url}
+                    alt="Wedstrijd foto"
+                    onClick={() => setFullscreenPhoto(item.url)}
+                    style={{
+                      width: '100%',
+                      maxHeight: 200,
+                      objectFit: 'cover',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                    }}
+                  />
+                </>
               )}
             </div>
           ))}

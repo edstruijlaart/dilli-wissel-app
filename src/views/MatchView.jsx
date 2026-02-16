@@ -368,6 +368,9 @@ export default function MatchView({ state }) {
           </div>
         )}
 
+        {/* Updates (Audio + Foto) - Coach view */}
+        {isOnline && matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} key={audioRefresh} />}
+
         {/* End half confirmation */}
         {showEndHalfConfirm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
@@ -447,12 +450,13 @@ export default function MatchView({ state }) {
           <PhotoCapture
             matchCode={matchCode}
             onClose={() => setShowPhotoCapture(false)}
-            onPhotoUploaded={(url) => {
+            onPhotoUploaded={({ url, caption }) => {
               addEvent({
                 type: 'photo',
                 time: fmt(matchTimer || 0),
                 half: currentHalf || 1,
                 url,
+                caption,
               });
               setShowPhotoCapture(false);
             }}
