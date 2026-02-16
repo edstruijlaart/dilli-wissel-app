@@ -15,8 +15,9 @@ export default function ViewerView({ code, onBack }) {
   const [timer, setTimer] = useState(0);
   const [goalToast, setGoalToast] = useState(null);
   const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
-  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
+  const [streamBanner, setStreamBanner] = useState(false);
   const prevEventsLen = useRef(-1); // -1 = nog niet geïnitialiseerd
+  const prevLiveAudio = useRef(null);
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
   useEffect(() => {
@@ -61,6 +62,26 @@ export default function ViewerView({ code, onBack }) {
       }
     }
   }, [events]);
+
+  // Detecteer live audio stream start
+  useEffect(() => {
+    if (!match || !match.isRunning || match.halfBreak) {
+      prevLiveAudio.current = null;
+      return;
+    }
+
+    // Check if live audio event was added
+    const liveAudioEvents = events.filter(ev => ev.type === 'live_audio_start');
+    const hasLiveAudio = liveAudioEvents.length > 0;
+
+    if (hasLiveAudio && prevLiveAudio.current === false) {
+      // Stream just started!
+      setStreamBanner(true);
+      setTimeout(() => setStreamBanner(false), 5000);
+    }
+
+    prevLiveAudio.current = hasLiveAudio;
+  }, [events, match]);
 
   const elapsed = getElapsed();
   const subElapsed = getSubElapsed();
@@ -200,68 +221,53 @@ export default function ViewerView({ code, onBack }) {
           </div>
         )}
 
-        {/* Event feed */}
-        {events.length > 0 && (
+        {/* Event feed - only non-photo events (goals, subs, etc.) */}
+        {events.filter(ev => ev.type !== 'photo').length > 0 && (
           <div style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Gebeurtenissen</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[...events].reverse().slice(0, 20).map((ev, i) => (
+              {[...events].filter(ev => ev.type !== 'photo').reverse().slice(0, 20).map((ev, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textDim }}>
                   <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 40 }}>{ev.time || ''}</span>
-                  {ev.type === 'photo' ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-                      <span>{formatEvent(ev)}</span>
-                      <img
-                        src={ev.url}
-                        alt="Wedstrijd foto"
-                        onClick={() => setFullscreenPhoto(ev.url)}
-                        style={{
-                          width: 60,
-                          height: 60,
-                          objectFit: 'cover',
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          border: `2px solid ${T.glassBorder}`,
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <span>{formatEvent(ev)}</span>
-                  )}
+                  <span>{formatEvent(ev)}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Fullscreen photo viewer */}
-        {fullscreenPhoto && (
+        {/* Stream start banner (subtle) */}
+        {streamBanner && (
           <div
-            onClick={() => setFullscreenPhoto(null)}
             style={{
               position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.95)',
-              zIndex: 10000,
+              top: 80,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: 'linear-gradient(135deg, #16A34A, #22C55E)',
+              color: '#FFF',
+              padding: '12px 24px',
+              borderRadius: 12,
+              fontSize: 13,
+              fontWeight: 600,
+              zIndex: 9999,
+              boxShadow: '0 4px 16px rgba(22,163,74,0.3)',
+              animation: 'slideDown 0.3s ease-out',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              padding: 20,
-              cursor: 'pointer',
+              gap: 8,
             }}
           >
-            <img
-              src={fullscreenPhoto}
-              alt="Wedstrijd foto"
-              style={{
-                maxWidth: '100%',
-                maxHeight: '100%',
-                objectFit: 'contain',
-                borderRadius: 12,
-              }}
-            />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFF', animation: 'pulse 1.5s infinite' }} />
+            Live audio is nu actief
           </div>
         )}
+        <style>{`
+          @keyframes slideDown {
+            from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+          }
+        `}</style>
       </div>
     </div>
   );

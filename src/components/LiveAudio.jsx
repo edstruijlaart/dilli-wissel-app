@@ -102,6 +102,20 @@ export default function LiveAudio({ matchCode, isCoach = false, onError }) {
       // Enable microphone for coach
       if (isCoach) {
         await newRoom.localParticipant.setMicrophoneEnabled(true);
+
+        // Log live audio start event (for viewer notification)
+        try {
+          await fetch(`/api/match/${matchCode}/events`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'live_audio_start',
+              timestamp: new Date().toISOString(),
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to log live_audio_start event:', err);
+        }
       }
 
       // For viewers: check if there's an active stream within 5 seconds

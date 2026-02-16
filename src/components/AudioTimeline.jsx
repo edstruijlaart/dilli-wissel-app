@@ -3,28 +3,39 @@ import { T, card } from '../theme';
 
 export default function AudioTimeline({ matchCode, isCoach = false }) {
   const [messages, setMessages] = useState([]);
+  const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);
+  const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
 
   useEffect(() => {
     if (!matchCode) return;
 
-    const fetchMessages = async () => {
+    const fetchUpdates = async () => {
       try {
-        const res = await fetch(`/api/match/audio/${matchCode}`);
-        if (res.ok) {
-          const data = await res.json();
-          setMessages(data.messages || []);
+        // Fetch audio messages
+        const audioRes = await fetch(`/api/match/audio/${matchCode}`);
+        if (audioRes.ok) {
+          const audioData = await audioRes.json();
+          setMessages(audioData.messages || []);
+        }
+
+        // Fetch events (for photos)
+        const eventsRes = await fetch(`/api/match/${matchCode}/events`);
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          const photoEvents = (eventsData.events || []).filter(ev => ev.type === 'photo');
+          setPhotos(photoEvents);
         }
       } catch (err) {
-        console.error('Fetch audio messages error:', err);
+        console.error('Fetch updates error:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 10000); // Poll every 10s
+    fetchUpdates();
+    const interval = setInterval(fetchUpdates, 10000); // Poll every 10s
     return () => clearInterval(interval);
   }, [matchCode]);
 
@@ -50,48 +61,103 @@ export default function AudioTimeline({ matchCode, isCoach = false }) {
     }
   };
 
-  if (loading || messages.length === 0) return null;
+  // Combine audio + photos into single feed
+  const allUpdates = [
+    ...messages.map(msg => ({ ...msg, type: 'audio', timestamp: new Date(msg.timestamp || 0).getTime() })),
+    ...photos.map(photo => ({ ...photo, type: 'photo', timestamp: new Date(photo.timestamp || 0).getTime() })),
+  ].sort((a, b) => b.timestamp - a.timestamp); // Most recent first
+
+  if (loading || allUpdates.length === 0) return null;
 
   return (
-    <div style={{ ...card, padding: 16, marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 18 }}>🎙️</span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>
-          Coach Updates ({messages.length})
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {messages.map((msg, i) => (
-          <div key={i} style={{ padding: '12px 14px', borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, position: 'relative' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
-                {msg.matchTime || '--:--'}
-              </span>
-              <span style={{ fontSize: 11, color: T.textMuted }}>H{msg.half}</span>
-              {isCoach && (
-                <button
-                  onClick={() => handleDelete(msg.url)}
-                  disabled={deleting === msg.url}
+    <>
+      <div style={{ ...card, padding: 16, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 18 }}>📢</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Updates ({allUpdates.length})
+          </span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {allUpdates.map((item, i) => (
+            <div key={i} style={{ padding: '12px 14px', borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, position: 'relative' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, fontFamily: "'JetBrains Mono',monospace" }}>
+                  {item.time || item.matchTime || '--:--'}
+                </span>
+                <span style={{ fontSize: 11, color: T.textMuted }}>H{item.half}</span>
+                <span style={{ fontSize: 11, color: T.textMuted }}>
+                  {item.type === 'audio' ? '🎙️ Audio' : '📷 Foto'}
+                </span>
+                {isCoach && item.type === 'audio' && (
+                  <button
+                    onClick={() => handleDelete(item.url)}
+                    disabled={deleting === item.url}
+                    style={{
+                      marginLeft: 'auto',
+                      background: 'none',
+                      border: 'none',
+                      cursor: deleting === item.url ? 'wait' : 'pointer',
+                      padding: '4px 8px',
+                      color: T.danger,
+                      fontSize: 18,
+                      lineHeight: 1,
+                      opacity: deleting === item.url ? 0.5 : 1,
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {item.type === 'audio' ? (
+                <audio src={item.url} controls style={{ width: '100%', height: 32 }} />
+              ) : (
+                <img
+                  src={item.url}
+                  alt="Wedstrijd foto"
+                  onClick={() => setFullscreenPhoto(item.url)}
                   style={{
-                    marginLeft: 'auto',
-                    background: 'none',
-                    border: 'none',
-                    cursor: deleting === msg.url ? 'wait' : 'pointer',
-                    padding: '4px 8px',
-                    color: T.danger,
-                    fontSize: 18,
-                    lineHeight: 1,
-                    opacity: deleting === msg.url ? 0.5 : 1,
+                    width: '100%',
+                    maxHeight: 200,
+                    objectFit: 'cover',
+                    borderRadius: 8,
+                    cursor: 'pointer',
                   }}
-                >
-                  ×
-                </button>
+                />
               )}
             </div>
-            <audio src={msg.url} controls style={{ width: '100%', height: 32 }} />
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+
+      {/* Fullscreen photo viewer */}
+      {fullscreenPhoto && (
+        <div
+          onClick={() => setFullscreenPhoto(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.95)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            cursor: 'pointer',
+          }}
+        >
+          <img
+            src={fullscreenPhoto}
+            alt="Wedstrijd foto"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              borderRadius: 12,
+            }}
+          />
+        </div>
+      )}
+    </>
   );
 }
