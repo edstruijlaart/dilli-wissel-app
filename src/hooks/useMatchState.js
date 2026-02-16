@@ -409,7 +409,7 @@ export function useMatchState() {
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
     coachName, setCoachName,
-    createOnlineMatch, updateScore, reconnectToMatch,
+    createOnlineMatch, updateScore, reconnectToMatch, addEvent,
     // Computed
     totalMatchTime,
     // Actions
