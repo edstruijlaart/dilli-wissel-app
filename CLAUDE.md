@@ -3,107 +3,269 @@
 ## Waarom dit project bestaat
 
 Ed is voetbalcoach bij v.v. Dilettant (jeugdteam van zijn zoontje). Deze app regelt
-eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen straks
-live meekijken via een deelbare link.
+eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen live
+meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief — Fase 1 (Vite migratie) compleet, Fase 2 (multiplayer) in planning
+**Status**: Actief productie — v3.6.x
+**URL**: https://dilli.edstruijlaart.nl
+**Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
+
+---
 
 ## Tech Stack
 
-| Component | Technologie |
-|-----------|-------------|
-| Framework | React 18 |
-| Bundler | Vite 6 |
-| Audio | Tone.js 14 (fluitsignalen) |
-| Styling | Inline CSS-in-JS |
-| Fonts | Google Fonts (DM Sans, JetBrains Mono) |
-| PWA | vite-plugin-pwa (Workbox) |
-| Hosting | Vercel (toekomst: `dilli.edstruijlaart.nl`) |
-| Data (fase 2) | Vercel KV (polling, geen WebSockets) |
+| Component | Technologie | Doel |
+|-----------|-------------|------|
+| Framework | React 18 + Vite 6 | Frontend + build |
+| PWA | vite-plugin-pwa (Workbox) | Installeerbaar op homescreen |
+| Styling | Inline CSS-in-JS | Geen build-stap voor styles |
+| Fonts | Google Fonts | DM Sans + JetBrains Mono |
+| Audio (tonen) | Tone.js 14 | Fluitsignalen |
+| Live audio | LiveKit (`livekit-client` + `livekit-server-sdk`) | WebRTC audio streaming coach → kijkers |
+| Data (match state) | Vercel KV (`@upstash/redis`) | Match state + events (TTL 8 uur) |
+| Data (audio/foto) | Vercel Blob (`@vercel/blob`) | Audio webm + JPEG foto's |
+| API | Vercel Serverless Functions | `/api/match/*` routes |
+| Hosting | Vercel | Auto-deploy bij git push |
 
-## Architectuur
+---
 
-### Fase 1 (huidige staat): Standalone PWA
+## Volledige Bestandsstructuur
 
 ```
 dilli-wissel-app/
-├── index.html              # Vite entry point
-├── package.json            # Dependencies
-├── vite.config.js          # Vite + React + PWA plugins
-├── vercel.json             # SPA rewrites
-├── CLAUDE.md               # Dit bestand
+├── index.html                    # Vite entry, dynamisch manifest op basis van URL
+├── package.json                  # v3.6.x
+├── vite.config.js                # Vite + React + PWA config
+├── vercel.json                   # SPA rewrites + API routes
+├── CLAUDE.md                     # Dit bestand
+│
 ├── public/
-│   └── icons/              # PWA iconen (192, 512)
-└── src/
-    ├── main.jsx            # React root mount
-    ├── App.jsx             # View router (SETUP | MATCH | SUMMARY)
-    ├── theme.js            # Kleuren, stijlen, globalStyles CSS
-    ├── utils/
-    │   ├── format.js       # fmt() tijdformatter, parseNames()
-    │   ├── audio.js        # playWhistle(), vibrate patronen
-    │   └── confetti.js     # fireConfetti() canvas animatie
-    ├── hooks/
-    │   └── useMatchState.js  # Alle state + wisselalgoritme + acties
-    ├── components/
-    │   ├── Icons.jsx       # Alle SVG iconen
-    │   ├── DilliLogo.jsx   # v.v. Dilettant club logo
-    │   ├── Badge.jsx       # Veld/Bank/Keeper badges
-    │   └── Stepper.jsx     # Numerieke +/- stepper
-    └── views/
-        ├── SetupView.jsx   # Spelers invoeren + config
-        ├── MatchView.jsx   # Live wedstrijd (timer, score, wissels)
-        └── SummaryView.jsx # Statistieken na afloop
-```
-
-### Fase 2 (gepland): Multiplayer
-
-```
-Toevoegingen:
-├── api/
+│   ├── favicon.svg               # v.v. Dilettant club logo (SVG, uit DilliLogo.jsx)
+│   ├── admin-manifest.json       # PWA manifest voor /admin route
+│   └── icons/
+│       ├── icon-192.png          # PWA icon (klein)
+│       └── icon-512.png          # PWA icon (groot)
+│
+├── api/                          # Vercel Serverless Functions
+│   ├── auth/
+│   │   └── verify.js            # Coach authenticatie verificatie
+│   ├── admin/
+│   │   ├── teams.js             # Admin: teams beheren
+│   │   ├── matches.js           # Admin: wedstrijden overzicht
+│   │   └── delete-match.js      # Admin: wedstrijd verwijderen
 │   └── match/
-│       ├── create.js       # POST: wedstrijd aanmaken, code genereren
-│       ├── [code].js       # GET/PUT: wedstrijd state ophalen/updaten
-│       └── [code]/events.js # GET/POST: event log
+│       ├── create.js            # POST: wedstrijd aanmaken, 4-letter code genereren
+│       ├── live.js              # GET: live wedstrijden overzicht (voor HomeView)
+│       ├── [code].js            # GET/PUT: match state (Vercel KV)
+│       ├── events/
+│       │   └── [code].js        # GET/POST: event log (goals, wissels, foto's, audio_start)
+│       ├── audio/
+│       │   └── [code].js        # GET/POST/DELETE: audio messages (Vercel Blob)
+│       ├── audio-token/
+│       │   └── [code].js        # POST: LiveKit JWT token genereren
+│       └── photo/
+│           └── upload.js        # POST/DELETE: foto upload (Vercel Blob, BLOB2 token)
+│
 └── src/
+    ├── main.jsx                  # React root mount
+    ├── version.js                # VERSION constante — update bij elke release!
+    ├── App.jsx                   # Hoofd router: HomeView | MatchView | SummaryView | ViewerView | AdminView
+    ├── theme.js                  # Design tokens: kleuren, card, btnP, btnS, btnD, mono
+    │
+    ├── utils/
+    │   ├── format.js             # fmt(seconds) → "mm:ss", parseNames()
+    │   ├── audio.js              # playWhistle(), vibrate(), notifyGoal() via Tone.js
+    │   └── confetti.js           # fireConfetti() canvas animatie bij doelpunten
+    │
     ├── hooks/
-    │   └── useMatchPolling.js  # Poll /api/match/{code} elke 5s
+    │   ├── useMatchState.js      # CENTRALE STATE: alle wedstrijd state + wisselalgoritme
+    │   │                         # Exporteert: addEvent, updateScore, startTimer, etc.
+    │   └── useMatchPolling.js    # Viewer polling: GET /api/match/{code} elke 5s
+    │                             # Returnt: match, events, getElapsed(), getSubElapsed()
+    │
+    ├── components/
+    │   ├── Icons.jsx             # SVG iconen: football, timer, swap, play, pause, check,
+    │   │                         # x, eye, microphone, camera, image, glove, whistle, etc.
+    │   ├── DilliLogo.jsx         # v.v. Dilettant club logo SVG component
+    │   ├── Badge.jsx             # Status badges: "Veld", "Bank", "Keeper"
+    │   ├── Stepper.jsx           # Numerieke +/- stepper (setup config)
+    │   ├── AudioRecorder.jsx     # Opnemen + uploaden audio update (coach)
+    │   │                         # Props: matchCode, matchTime, currentHalf, onClose, onUploaded
+    │   │                         # Features: record, stop, preview, optioneel bericht (60 tekens)
+    │   ├── AudioTimeline.jsx     # Gecombineerde Updates feed: audio + foto's samen
+    │   │                         # Props: matchCode, isCoach, maxItems
+    │   │                         # Coach (isCoach=true): alle updates, × delete knop voor audio + foto
+    │   │                         # Viewer (maxItems=1): alleen laatste update ("Laatste Update")
+    │   │                         # Polt elke 10s (audio via Blob list, foto's via events API)
+    │   ├── LiveAudio.jsx         # LiveKit WebRTC audio streaming
+    │   │                         # Coach: start/stop microfoon, mute knop, luisteraars teller
+    │   │                         # Viewer: verbindt alleen als er echt audio tracks zijn (geen false positive)
+    │   │                         #   → 5s timeout: geen stream → status 'no_stream'
+    │   │                         #   → TrackSubscribed: pas dan status 'connected'
+    │   └── PhotoCapture.jsx      # Camera + bibliotheek foto upload (coach)
+    │                             # Props: matchCode, onClose, onPhotoUploaded({url, caption})
+    │                             # Features: camera (environment-facing), bibliotheek kiezen,
+    │                             #   compressie (max 1920x1080, JPEG 80%), optionele caption (80 tekens)
+    │
     └── views/
-        ├── HomeView.jsx    # Start/join scherm
-        ├── JoinView.jsx    # 4-letter code invoeren
-        └── ViewerView.jsx  # Read-only live view
+        ├── HomeView.jsx          # Startscherm: live wedstrijden + coach login + viewer join
+        │                         # Viewer-first UI: grote "Kijk live mee" knop
+        ├── SetupView.jsx         # Coach setup: spelers, keeper, config
+        ├── MatchView.jsx         # COACH LIVE VIEW
+        │                         # Volgorde van boven naar onder:
+        │                         #   Online indicator (code, viewers)
+        │                         #   Timer card (helft, tijd, progressbar, wissel countdown)
+        │                         #   Scoreboard (+ doelpuntscorer popup)
+        │                         #   Live Audio component (coach zend, viewers luisteren)
+        │                         #   Audio + Foto knoppen (alleen tijdens lopende wedstrijd)
+        │                         #   Keeper picker
+        │                         #   Rust kaart (als halfBreak)
+        │                         #   Wissel alert (automatisch)
+        │                         #   Veld (spelers in het veld, klik voor handmatige wissel)
+        │                         #   Bank (bankspelers)
+        │                         #   Updates feed (AudioTimeline isCoach=true, onderaan)
+        ├── ViewerView.jsx        # KIJKER LIVE VIEW
+        │                         # Volgorde van boven naar onder:
+        │                         #   Header (team, code, status indicator)
+        │                         #   Timer
+        │                         #   Score
+        │                         #   Live Audio (Luister live mee knop)
+        │                         #   Laatste Update (AudioTimeline maxItems=1)
+        │                         #   Rust kaart
+        │                         #   Veld (read-only)
+        │                         #   Bank (read-only)
+        │                         #   Gebeurtenissen (goals + wissels, geen foto's)
+        │                         #   Subtiele banner bij stream start (+5s auto-dismiss)
+        ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis
+        └── AdminView.jsx         # Admin panel: wedstrijden beheren
 ```
 
-## Drie Views
+---
 
-1. **SETUP** — Spelers invoeren (handmatig of plakken), keeper aanwijzen, wedstrijdinstellingen
-2. **MATCH** — Live timer, veld/bank weergave, wisselwaarschuwingen, score bijhouden
-3. **SUMMARY** — Speeltijdstatistieken, wisselgeschiedenis
+## Features Overzicht
 
-## Key Features
+### Coach
+- **Setup**: spelers invoeren (handmatig of clipboard paste), keeper aanwijzen, config instellen
+- **Live timer**: helft/halves, progressbar, wissel countdown, pause, blessuretijd
+- **Score**: +/- knoppen, doelpuntscorer popup (wie scoorde?)
+- **Wissels**: automatische wisseladviezen op interval, handmatig tap-to-sub
+- **Keeper swap**: andere keeper aanwijzen tijdens wedstrijd
+- **Audio update**: opnemen (webm), optioneel bericht (60 tekens), upload naar Vercel Blob
+- **Foto**: camera of bibliotheek, compressie, optionele caption (80 tekens), upload
+- **Live audio**: WebRTC via LiveKit, coach zendt microfoon uit, viewers luisteren
+- **Updates beheren**: alle audio/foto updates zien, verwijderen (× knop)
+- **Confetti + geluid + vibratie**: bij doelpunten
+- **Wake lock**: scherm blijft aan tijdens wedstrijd
 
-- **Fair rotation**: Wisselalgoritme sorteert op minst gespeelde tijd
-- **Clipboard parsing**: Plak een spelerslijst, filtert automatisch nummers/coachnamen
-- **Geluid + vibratie**: Fluitsignaal via Tone.js, verschillende trilpatronen
-- **Confetti**: Bij doelpunten (canvas animatie)
-- **iOS geoptimaliseerd**: Landscape lock hint, wake lock, safe-area insets
-- **PWA**: Installeerbaar op homescreen, offline via Workbox service worker
+### Kijker
+- **Live volgen**: score, timer, veld/bank bezetting via polling (5s interval)
+- **Laatste update**: meest recente audio of foto bovenaan
+- **Luister live mee**: als coach live audio uitzend (WebRTC, automatisch starten)
+- **Doelpunt notificatie**: confetti + toast bij goals
+- **Foto's bekijken**: fullscreen tap in Updates feed
+- **Stream start banner**: subtiele groene banner als coach live gaat (+5s auto-dismiss)
+- **Geen stream melding**: duidelijke melding als er geen actieve audio stream is
 
-## Configureerbare Parameters
+---
 
-- Speelduur per helft (minuten)
-- Aantal helften (2-4)
-- Aantal spelers op het veld (minimum 3)
-- Wisselinterval (automatische prompts elke N minuten)
-- Team namen (thuis/uit)
-- Keeper slot (aparte regels)
+## Data Flow
 
-## Design
+### Match State (Vercel KV)
+```
+Coach → PUT /api/match/{code} → Redis (TTL 8u)
+                                     ↓ poll elke 5s
+                              Viewer GET /api/match/{code}
+```
 
-- Licht thema (geen dark mode)
-- Primaire kleur: `#16A34A` (groen)
-- Keeper kleur: `#D97706` (oranje)
-- v.v. Dilettant club logo als custom SVG
+### Events (Vercel KV)
+```
+Coach addEvent() → POST /api/match/events/{code} → Redis array
+  - type: 'goal_home' | 'goal_away' | 'sub' | 'photo' | 'live_audio_start'
+  - time, half, url (foto), caption (foto), scorer (goal)
+```
+
+### Audio Updates (Vercel Blob)
+```
+Coach → AudioRecorder → POST /api/match/audio/{code}
+  Headers: X-Match-Time, X-Half, X-Message (URL-encoded)
+  Body: audio/webm blob
+  Blob metadata: { matchTime, half, message }
+  → Vercel Blob opgeslagen als: match/{code}/audio/{timestamp}-{time}-H{half}.webm
+```
+
+### Foto's (Vercel Blob)
+```
+Coach → PhotoCapture → POST /api/match/photo/upload
+  Body: { matchCode, image (base64 JPEG), timestamp, caption }
+  Blob metadata: { caption }
+  BLOB2_READ_WRITE_TOKEN (aparte token!)
+  → Vercel Blob opgeslagen als: match-{code}-{timestamp}.jpg
+```
+
+### Live Audio (LiveKit WebRTC)
+```
+Coach → POST /api/match/audio-token/{code} → JWT token
+Coach → LiveKit Room (publish mic)
+             ↓
+Viewer → POST /api/match/audio-token/{code} → JWT token
+Viewer → LiveKit Room (subscribe)
+  → 5s timeout: als geen audio tracks → 'no_stream'
+  → TrackSubscribed → 'connected' (echte audio)
+```
+
+---
+
+## Vercel Environment Variables
+
+| Variabele | Gebruik |
+|-----------|---------|
+| `KV_REST_API_URL` | Vercel KV (match state + events) |
+| `KV_REST_API_TOKEN` | Vercel KV token |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (audio) |
+| `BLOB2_READ_WRITE_TOKEN` | Vercel Blob (foto's, apart store) |
+| `LIVEKIT_URL` | LiveKit server URL |
+| `LIVEKIT_API_KEY` | LiveKit API key |
+| `LIVEKIT_API_SECRET` | LiveKit API secret |
+| `ADMIN_PASSWORD` | Admin panel toegang |
+
+---
+
+## Design System
+
+Alle design tokens in `src/theme.js`:
+
+```javascript
+T.accent      // #16A34A  — groen (primair)
+T.warn        // #D97706  — oranje (keeper, rust)
+T.danger      // #DC2626  — rood (live audio, stop)
+T.text        // Hoofdtekst
+T.textMuted   // Subtext
+T.textDim     // Placeholder
+T.glass       // Glassmorphism achtergrond
+T.glassBorder // Glassmorphism rand
+
+card    // Card stijl (border, borderRadius, padding)
+btnP    // Primaire knop (groen)
+btnS    // Secundaire knop (glas)
+btnD    // Danger knop (rood)
+mono    // JetBrains Mono font stijl
+```
+
+---
+
+## Bekende Valkuilen
+
+| Situatie | Oplossing |
+|----------|-----------|
+| Service worker cached oude versie | Hard refresh (Cmd+Shift+R) of PWA herinstalleren |
+| `addEvent` undefined | Controleer return statement van `useMatchState.js` — alle exports moeten er in staan |
+| Foto upload mislukt | Controleer BLOB2_READ_WRITE_TOKEN in Vercel env vars |
+| Live audio "actief" zonder stream | Bug was: status 'connected' bij room connect ipv bij track ontvangst. Fix: viewers wachten op TrackSubscribed |
+| Audio message niet zichtbaar | Blob metadata via `addMetadata` — check of `blob.metadata?.message` beschikbaar is in list() |
+| foto's niet in feed | Events API URL was `/api/match/{code}/events` maar moet zijn `/api/match/events/{code}` |
+
+---
 
 ## Ontwikkeling
 
@@ -113,76 +275,41 @@ npm run build    # Productie build → dist/
 npm run preview  # Preview productie build
 ```
 
-## Productie
+---
 
-- **URL**: `https://dilli.edstruijlaart.nl` (Vercel)
-- **Deploy**: Auto-deploy bij `git push` naar `main`
-- **Status**: ✅ Live — laatste deploy 2d geleden
-- **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
-- **Legacy versie**: Originele single-file app staat op `legacy` branch
+## Release Protocol
+
+**ALTIJD bij elke deploy:**
+
+1. **Versie updaten** in BEIDE bestanden:
+   - `src/version.js` → `export const VERSION = '3.x.x';`
+   - `package.json` → `"version": "3.x.x"`
+
+2. **Type bepalen:**
+   - Patch (3.x.**x**): bug fix, opruimen
+   - Minor (3.**x**.0): nieuwe feature
+   - Major (**x**.0.0): breaking change
+
+3. **Deploy:**
+```bash
+git add -A
+git commit -m "Release v3.x.x - [samenvatting]"
+git push origin main
+# Vercel deployt automatisch binnen ~2 min
+```
+
+4. **Testen**: hard refresh bij alle testdevices na deploy
+
+---
 
 ## Git Branches
 
-- `main` — v3 (Vite + React componenten)
-- `legacy` — v2 (originele 852-regel index.html, standalone)
+- `main` — Actieve productieversie (v3.x)
+- `legacy` — v2 (originele 852-regel index.html, standalone zonder multiplayer)
 
-## Upgrade Roadmap
-
-Zie planbestand: `~/.claude/plans/synchronous-orbiting-hellman.md`
-
-- **Fase 1** ✅ Vite + React migratie (componenten, build pipeline)
-- **Fase 2** 📋 Multiplayer (Vercel KV, polling, rollen, deelbare links)
-- **Fase 3** 📋 Uitbreidingen (doelpuntscorer popup, notificaties, geschiedenis)
+---
 
 ## Relatie met andere projecten
 
-Standalone privéproject. Geen directe relatie met Ed's muziek/podcast projecten.
-Draait straks op Vercel (zelfde account als edstruijlaart.nl, apart project).
-
-## Release Checklist
-
-**BELANGRIJK:** Bij elke deploy ALTIJD versie updaten!
-
-### 1. Versie updaten (VERPLICHT bij elke deploy)
-
-**Bepaal versie type:**
-- **Patch (+0.0.1)**: Bug fixes, kleine UI tweaks, verwijderen ongebruikte code
-- **Minor (+0.1.0)**: Nieuwe features (bijv. live audio, foto's, notificaties)
-- **Major (+1.0.0)**: Breaking changes (bijv. nieuwe architectuur, verwijderde features)
-
-**Update beide bestanden:**
-```bash
-# src/version.js
-export const VERSION = '3.x.x';
-
-# package.json
-"version": "3.x.x"
-```
-
-### 2. Commit + Deploy
-```bash
-git add -A
-git commit -m "Release v3.x.x - [korte samenvatting]"
-git push origin main
-```
-
-Vercel deployt automatisch binnen ~2 minuten.
-
-### 3. Update Announcement (optioneel)
-
-Als je de update wilt delen met ouders/coaches:
-
-**Template:**
-```
-Dilli Wissel App v3.x.x 🎉
-
-✅ [Feature 1]
-✅ [Feature 2]
-✅ [Feature 3]
-
-Update via je browser (verversen) of herinstalleer via homescreen!
-
-Ontwikkeld door Ears Want Music
-```
-
-Delen via WhatsApp groep of tijdens wedstrijd.
+Standalone privéproject voor Ed als voetbalcoach. Geen directe relatie met
+muziek/podcast projecten. Draait volledig op Vercel (apart project van edstruijlaart.nl).
