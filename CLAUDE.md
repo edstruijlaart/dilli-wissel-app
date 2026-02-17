@@ -402,3 +402,36 @@ Doe dit VOOR je ook maar één regel SaaS-code schrijft:
 - **Geen rebranding nodig:** bij internationale expansie zelfde naam, andere taal UI
 
 App-UI blijft initieel **Nederlands**. Naam en domein zijn internationaal. Zo deed Spond het ook.
+
+---
+
+### Landing Page Demo — Strategie & Grenzen
+
+**Aanbevolen aanpak (gefaseerd):**
+
+**Fase 0 — Coming soon pagina (week 1):**
+- Embed een 45-60 seconden MP4 screen recording
+- Coach-scherm + ouder-scherm naast elkaar
+- Ed's stem als audio-update (killer feature zichtbaar)
+- Waitlist formulier (Resend, naam + email)
+- Geen backend nodig, werkt altijd
+
+**Fase 1 — Echte landingspagina met "Kijk mee als ouder" knop:**
+- Altijd-actieve demowedstrijd: vaste code `DEMO`
+- Bezoeker tikt DEMO in, ziet het echte viewer-scherm
+- Nep-activiteit via cron job (wissel, goal, timer tick) zodat het levendig oogt
+- Optioneel: pre-recorded audio van Ed als coach-voice
+
+**⚠️ Bekende beperkingen demo:**
+
+| Probleem | Oplossing |
+|----------|-----------|
+| Demo-match lijkt dood (0-0, timer stil) | Cron job genereert nep-activiteit elke paar minuten |
+| Audio staat stil — juist dat verkoopt het | Pre-recorded audio loop via LiveKit bot, of toon UI zonder geluid |
+| Iemand kaapt de demo-match (code DEMO is publiek) | Coach-route voor DEMO vergrendelen (wachtwoord of IP-check) |
+| Vercel KV TTL gooit match weg na 8 uur | Cron job reset demo-match dagelijks, of TTL uitschakelen voor demo-key |
+| Viewer-demo toont alleen output, niet de coach-kant | Screen recording toont coach-kant, live demo toont viewer-kant — beiden nodig |
+| 50-80 gelijktijdige viewers max (Vercel free tier) | Geen issue in validatiefase, upgrade pas bij schaal |
+| LiveKit free tier: ~3.300 demo-sessies/mnd | Ruim genoeg tot 50+ clubs |
+
+**Conclusie:** Fase 0 (screen recording) is de juiste first step. Fase 1 (live demo) bouw je pas als de SaaS-laag staat en je echte wedstrijden kunt doorsluizen als social proof.
