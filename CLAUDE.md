@@ -313,3 +313,92 @@ git push origin main
 
 Standalone privéproject voor Ed als voetbalcoach. Geen directe relatie met
 muziek/podcast projecten. Draait volledig op Vercel (apart project van edstruijlaart.nl).
+
+---
+
+## Pijler: SaaS Transitie — CoachCast
+
+**Status:** In voorbereiding — validatiefase (feb 2026)
+**Doel:** White-label SaaS platform voor eerlijke speeltijdverdeling + live ouderbetrokkenheid bij jeugdsport
+**Naam beslissing:** **CoachCast** (coachcast.app — nog registreren)
+**Rapport:** `~/Desktop/SaaS-Analyse-Wissel-App.pdf` (volledig onderbouwd businessplan)
+
+### Kernstrategie
+
+- **White-label:** Clubs kopen licentie, configureren eigen logo/naam/teamnamen, coaches gebruiken het. Ed beheert niets na lancering.
+- **Zero-beheer:** Self-service signup, Mollie betaalflow, geautomatiseerde emails. Geen klantenservice.
+- **Naam:** CoachCast — internationaal, beschrijft de killer feature (coach broadcast live naar ouders), domein vrij.
+- **Markt:** NL eerst (50.000 jeugdteams, 4.350 clubs), dan België, dan Europa.
+
+### Pakketstructuur
+
+| Pakket | Prijs | Teams | Coaches | Key features |
+|--------|-------|-------|---------|--------------|
+| **Coach Solo** | €39/seizoen | 1 | 1 | Timer, wissels, score, audio updates, kijkers live mee |
+| **Club Starter** | €149/seizoen | 5 | 5 | + Foto's, live audio streaming, eigen logo/naam, club admin |
+| **Club Pro** | €299/seizoen | Onbeperkt | Onbeperkt | + Volledig white-label, seizoensstatistieken, PDF export |
+
+Optioneel: jaarlicenties met 15% korting (Coach Solo €69/jaar, Starter €259/jaar, Pro €499/jaar) om churn te reduceren.
+
+### Marktpositie
+
+**0 directe concurrenten** die speeltijdverdeling + live audio + ouder-engagement combineren.
+- Spond: communicatie, geen wedstrijdbeheer
+- GameChanger: live scoring (VS, baseball), geen speeltijd
+- SubTime / Fair Play Time: speeltijd alleen, geen live, geen ouders
+
+**Killer USP:** "Opa en oma luisteren live mee met de wedstrijd van hun kleinkind."
+
+### Financieel Overzicht
+
+| | Jaar 1 | Jaar 2 | Jaar 3 |
+|--|--------|--------|--------|
+| Omzet (realistisch) | €21.000 | €62.000 | €140.000 |
+| Hostingkosten | €1.200 | €6.600 | €6.500 |
+| Netto marge | ~94% | ~89% | ~95% (self-hosted LiveKit) |
+| Break-even | 30–40 klanten | — | — |
+
+**LiveKit:** Switch naar self-hosted Hetzner VPS (€40/mnd) zodra 50+ Club Starter klanten. Kosten dalen van ~€6.000 naar €480/jaar.
+
+### Te Bouwen (SaaS Laag — 4–6 weken)
+
+- [ ] Domein registreren: coachcast.app + coachcast.io
+- [ ] User accounts (FastAPI backend, Pi :8094, JWT auth)
+- [ ] PostgreSQL schema (users, clubs, teams, matches, subscriptions)
+- [ ] White-label configuratie (logo upload, naam, teamnamen)
+- [ ] Mollie betaalflow (seizoensbetaling + webhook)
+- [ ] Feature gates (check subscription bij audio/foto/live audio)
+- [ ] Club admin portal (teams + coaches beheren)
+- [ ] Coaches uitnodigen via magic link (Resend)
+- [ ] Privacy statement + verwerkersovereenkomst (GDPR, minderjarigen)
+- [ ] Landing page (coachcast.app)
+
+### Risico's (Samenvatting)
+
+| Risico | Niveau | Mitigatie |
+|--------|--------|-----------|
+| Ed's beschikbare tijd | Hoog | Zero-beheer architectuur, strikte scope |
+| Seizoensgebonden churn | Hoog | Jaarlicentie optie + automatische herinnering |
+| LiveKit kosten bij schaal | Middel | Self-hosted VPS bij 50+ klanten |
+| Betalingsbereidheid | Middel | Coach Solo (€39) als laagdrempelige instap |
+| GDPR minderjarigen | Middel | Privacy statement + verwerkersovereenkomst |
+
+### Validatieprotocol (Nu — Fase 0)
+
+Doe dit VOOR je ook maar één regel SaaS-code schrijft:
+
+1. Vraag 5 coaches buiten Dilettant het te gebruiken (gratis)
+2. Meet: gebruiken ze het elke wedstrijd? Delen ouders de code?
+3. Vraag direct: "Zou je €39 betalen voor een seizoen?"
+4. **Go als:** 4 van 5 zeggen ja op de betaalvraag
+5. **No-go als:** coaches stoppen na 3 wedstrijden of niemand wil betalen
+
+### Naamrationale: CoachCast
+
+- **Internationaal:** werkt in NL, Duitsland, Engeland zonder vertaling
+- **Beschrijvend:** coach cast (broadcast) live naar ouders — precies wat het doet
+- **Modern:** -cast suffix (podcast, Chromecast) signaleert streaming/live
+- **Domein vrij:** coachcast.app + coachcast.io beschikbaar (feb 2026)
+- **Geen rebranding nodig:** bij internationale expansie zelfde naam, andere taal UI
+
+App-UI blijft initieel **Nederlands**. Naam en domein zijn internationaal. Zo deed Spond het ook.
