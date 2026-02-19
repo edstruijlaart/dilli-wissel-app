@@ -314,6 +314,20 @@ git push origin main
 Standalone privéproject voor Ed als voetbalcoach. Geen directe relatie met
 muziek/podcast projecten. Draait volledig op Vercel (apart project van edstruijlaart.nl).
 
+**CoachCast is een APART project.** CoachCast (`~/Projecten/coachcast/`) is geforkt van
+Dilli en heeft eigen KV namespace (`cc:` prefix) en eigen Blob paden (`cc/` prefix).
+Wijzigingen in Dilli komen NOOIT automatisch terecht in CoachCast en vice versa.
+
+| Eigenschap | Dilli Wissel App | CoachCast |
+|-----------|-----------------|-----------|
+| Doel | Persoonlijk gebruik Ed (Dilettant) | Validatie-MVP voor SaaS |
+| URL | https://dilli.edstruijlaart.nl | Eigen domein (coachcast.app) |
+| Vercel project | `dilli-wissel-app` | `coachcast` |
+| KV prefix | `match:` (geen prefix) | `cc:match:` |
+| Blob prefix | `match/` (geen prefix) | `cc/match/` |
+| Repo | `edstruijlaart/dilli-wissel-app` | `edstruijlaart/coachcast` |
+| GitHub | Private | Private |
+
 ---
 
 ## Pijler: SaaS Transitie — CoachCast

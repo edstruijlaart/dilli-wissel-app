@@ -22,7 +22,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'URL required' });
       }
 
-      await del(url, { token: process.env.BLOB2_READ_WRITE_TOKEN });
+      const blobToken = process.env.BLOB2_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
+      await del(url, { token: blobToken });
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error('Delete photo error:', err);
@@ -64,17 +65,18 @@ export default async function handler(req, res) {
     const filename = `match-${matchCode.toLowerCase()}-${timestamp || Date.now()}.jpg`;
     console.log('Uploading to blob:', filename);
 
-    // Check if token exists
-    if (!process.env.BLOB2_READ_WRITE_TOKEN) {
-      console.error('BLOB2_READ_WRITE_TOKEN not found');
+    // Check if token exists (BLOB2 for photos, fallback to BLOB)
+    const blobToken = process.env.BLOB2_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      console.error('No blob token found (BLOB2_READ_WRITE_TOKEN or BLOB_READ_WRITE_TOKEN)');
       return res.status(500).json({ error: 'Blob storage not configured' });
     }
 
-    // Upload to Vercel Blob (using BLOB2 prefix)
+    // Upload to Vercel Blob
     const blob = await put(filename, buffer, {
       access: 'public',
       contentType: 'image/jpeg',
-      token: process.env.BLOB2_READ_WRITE_TOKEN,
+      token: blobToken,
       addMetadata: {
         caption: caption || '',
       },
