@@ -166,7 +166,7 @@ export default function MatchView({ state }) {
           </div>
           {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
           {isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
-            const { out: nextOut, inn: nextIn } = calculateSubs();
+            const { out: nextOut, inn: nextIn } = calculateSubs(onField, onBench, playTime, matchKeeper);
             if (nextOut.length === 0) return null;
             return (
               <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(217,119,6,0.04)", border: `1px solid ${T.warnDim}` }}>
