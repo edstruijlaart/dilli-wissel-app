@@ -3,6 +3,7 @@
   "rewrites": [
     { "source": "/join/:code", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" },
+    { "source": "/secretariaat", "destination": "/index.html" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

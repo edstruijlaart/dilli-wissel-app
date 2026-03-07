@@ -337,9 +337,12 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
           <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
             Versie {VERSION}
           </p>
-          <p style={{ fontSize: 11, color: T.textMuted }}>
+          <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 8 }}>
             Ontwikkeld door <strong style={{ color: T.text }}>Ears Want Music</strong>
           </p>
+          <a href="/secretariaat" style={{ fontSize: 11, color: T.textMuted, textDecoration: "none" }}>
+            Secretariaat
+          </a>
         </div>
       </div>
 
