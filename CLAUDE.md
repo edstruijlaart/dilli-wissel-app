@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.8.x
+**Status**: Actief productie — v3.9.x
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -34,7 +34,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.8.x
+├── package.json                  # v3.9.x
 ├── vite.config.js                # Vite + React + PWA config
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
@@ -139,6 +139,9 @@ dilli-wissel-app/
 - **Live timer**: helft/halves, progressbar, wissel countdown, pause, blessuretijd
 - **Score**: +/- knoppen, doelpuntscorer popup (wie scoorde?)
 - **Wissels**: automatische wisseladviezen op interval, handmatig tap-to-sub
+- **Multi-coach sync**: meerdere coaches delen dezelfde wedstrijd, server is single source of truth.
+  Coaches pollen elke 3s, adopteren wijzigingen van andere coaches (score, wissels, helft, timer).
+  Anti-echo guards (`_coachId` + `isAdoptingRef`) voorkomen sync-loops.
 - **Keeper swap**: andere keeper aanwijzen tijdens wedstrijd
 - **Audio update**: opnemen (webm), optioneel bericht (60 tekens), upload naar Vercel Blob
 - **Foto**: camera of bibliotheek, compressie, optionele caption (80 tekens), upload
