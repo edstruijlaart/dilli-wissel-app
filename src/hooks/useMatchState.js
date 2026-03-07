@@ -244,9 +244,12 @@ export function useMatchState() {
     else { fl = players.slice(0, playersOnField); bl = players.slice(playersOnField); }
     setOnField(fl); setOnBench(bl); setMatchKeeper(keeper);
     setPlayTime(init); setCurrentHalf(1); setMatchTimer(0); setSubTimer(0);
+    matchTimerRef.current = 0; // Reset ref zodat delta-berekening niet negatief wordt
     setIsRunning(false); setIsPaused(false); setShowSubAlert(false);
-    setSubHistory([]); setHalfBreak(false); alertShownRef.current = false;
+    setSubHistory([]); setHalfBreak(false); setInjuryTime(false);
+    alertShownRef.current = false; setManualSubMode(null);
     setHomeScore(0); setAwayScore(0); setGoalScorers({});
+    setEvents([]); // Reset events van vorige wedstrijd
     setView(VIEWS.MATCH);
   };
 
