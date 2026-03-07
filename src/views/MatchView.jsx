@@ -21,7 +21,7 @@ export default function MatchView({ state }) {
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
-    viewers,
+    viewers, events, players,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -399,6 +399,71 @@ export default function MatchView({ state }) {
         {/* Updates (Audio + Foto) - Coach view */}
         {isOnline && matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} key={audioRefresh} />}
 
+        {/* ─── Coach Dashboard ─── */}
+        {isRunning && (
+          <div style={{ marginTop: 8, marginBottom: 10 }}>
+            {/* Deel wedstrijd */}
+            {isOnline && matchCode && (
+              <button onClick={() => shareMatch(matchCode, homeTeam, awayTeam)} style={{
+                width: "100%", padding: "12px 20px", marginBottom: 10,
+                background: "linear-gradient(135deg, #25D366, #128C7E)",
+                border: "none", borderRadius: 14,
+                fontWeight: 700, fontSize: 14, cursor: "pointer",
+                fontFamily: "'DM Sans',sans-serif", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                boxShadow: "0 4px 16px rgba(37,211,102,0.3)",
+              }}>
+                {Icons.share(14, "#fff")} Deel wedstrijd
+              </button>
+            )}
+
+            {/* Speeltijdverdeling */}
+            {players && Object.keys(playTime).length > 0 && (() => {
+              const sorted = [...players].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0));
+              const max = Math.max(...Object.values(playTime), 1);
+              return (
+                <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Speeltijd</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {sorted.map(p => {
+                      const t = playTime[p] || 0;
+                      const m = Math.floor(t / 60);
+                      const isKeeper = p === matchKeeper;
+                      const isField = onField.includes(p);
+                      return (
+                        <div key={p} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: T.text, minWidth: 72, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {isKeeper ? '🧤 ' : ''}{p}
+                          </span>
+                          <div style={{ flex: 1, height: 8, background: T.glass, borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${(t / max) * 100}%`, background: isField ? `linear-gradient(90deg, ${T.accent}, ${T.accent}88)` : `linear-gradient(90deg, ${T.warn}, ${T.warn}88)`, borderRadius: 4, transition: "width 1s linear" }} />
+                          </div>
+                          <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 28, textAlign: "right" }}>{m}'</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Gebeurtenissen feed */}
+            {events.length > 0 && events.filter(ev => coachIsVisibleEvent(ev) && coachFormatEvent(ev) !== null).length > 0 && (
+              <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Gebeurtenissen</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {[...events].filter(ev => coachIsVisibleEvent(ev) && coachFormatEvent(ev) !== null).reverse().slice(0, 30).map((ev, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.textDim }}>
+                      <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 36 }}>{ev.time || ''}</span>
+                      <span>{coachFormatEvent(ev)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* End half confirmation */}
         {showEndHalfConfirm && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
@@ -519,4 +584,45 @@ export default function MatchView({ state }) {
       </div>
     </div>
   );
+}
+
+// --- Coach Dashboard helpers ---
+
+function shareMatch(matchCode, homeTeam, awayTeam) {
+  const url = `${window.location.origin}/?join=${matchCode}`;
+  const text = `📺 Volg ${homeTeam || 'Dilettant'}${awayTeam ? ` - ${awayTeam}` : ''} live!\n\nOpen de Dilli app en voer code ${matchCode} in, of tik op de link:\n${url}`;
+
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {
+      navigator.clipboard?.writeText(url);
+    });
+  } else {
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  }
+}
+
+const COACH_HIDDEN_EVENTS = ['photo'];
+
+function coachIsVisibleEvent(ev) {
+  return !COACH_HIDDEN_EVENTS.includes(ev.type);
+}
+
+function coachFormatEvent(ev) {
+  switch (ev.type) {
+    case 'match_start': return 'Wedstrijd gestart';
+    case 'half_start': return `Helft ${ev.half} gestart`;
+    case 'half_end': return `Einde helft ${ev.half}`;
+    case 'half_end_manual': return `Einde helft ${ev.half}`;
+    case 'goal_home': return `⚽ Doelpunt${ev.scorer ? ` ${ev.scorer}` : ''}!`;
+    case 'goal_away': return '⚽ Tegendoelpunt';
+    case 'sub_auto': return `🔄 ${(ev.out || []).join(', ')} → ${(ev.inn || []).join(', ')}`;
+    case 'sub_manual': return `🔄 ${(ev.out || []).join(', ')} ↔ ${(ev.inn || []).join(', ')}`;
+    case 'sub_skipped': return '⏭️ Wissel overgeslagen';
+    case 'keeper_change': return `🧤 Nieuwe keeper: ${ev.newKeeper}`;
+    case 'injury_time_start': return '⏱️ Blessuretijd';
+    case 'match_end': return 'Wedstrijd afgelopen';
+    case 'match_end_manual': return 'Wedstrijd afgelopen';
+    default: return null;
+  }
 }

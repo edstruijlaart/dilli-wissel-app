@@ -40,6 +40,7 @@ export function useMatchState() {
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [goalScorers, setGoalScorers] = useState({}); // { "Luuk": 2, "Sem": 1 }
+  const [events, setEvents] = useState([]);
 
   // Multiplayer state
   const [matchCode, setMatchCode] = useState(null);
@@ -296,7 +297,7 @@ export function useMatchState() {
     return () => clearInterval(iv);
   }, [isOnline, matchCode, isRunning, isPaused, halfBreak, syncToServer]);
 
-  // --- Multi-coach polling: adopteer wijzigingen van andere coaches ---
+  // --- Multi-coach polling: adopteer wijzigingen van andere coaches + events ophalen ---
   useEffect(() => {
     if (!isOnline || !matchCode || view === VIEWS.SETUP) return;
     const poll = async () => {
@@ -306,6 +307,14 @@ export function useMatchState() {
         const data = await res.json();
         // Viewer count altijd updaten
         if (data.viewers !== undefined) setViewers(data.viewers);
+        // Events ophalen voor coach dashboard
+        try {
+          const evRes = await fetch(`/api/match/events/${matchCode}`);
+          if (evRes.ok) {
+            const evData = await evRes.json();
+            setEvents(evData);
+          }
+        } catch { /* ignore */ }
         // Skip als server geen coach sync bevat (initiële create data)
         if (!data._coachId) return;
         // Skip eigen updates
@@ -499,7 +508,7 @@ export function useMatchState() {
     pasteText, setPasteText, pasteResult, setPasteResult,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
-    coachName, setCoachName, viewers,
+    coachName, setCoachName, viewers, events,
     createOnlineMatch, updateScore, reconnectToMatch, addEvent,
     // Computed
     totalMatchTime,
