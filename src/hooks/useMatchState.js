@@ -47,6 +47,7 @@ export function useMatchState() {
   const [team, setTeam] = useState("");
   const [coachName, setCoachName] = useState("");
   const [syncError, setSyncError] = useState(null);
+  const [viewers, setViewers] = useState(0);
 
   const intervalRef = useRef(null);
   const alertShownRef = useRef(false);
@@ -54,6 +55,9 @@ export function useMatchState() {
   const timerStartRef = useRef(null); // Timestamp wanneer timer start
   const matchTimerRef = useRef(0); // Huidige matchTimer waarde voor interval closure
   const pendingEventsRef = useRef([]); // Queue voor gefaalde event syncs
+  const coachIdRef = useRef(Math.random().toString(36).slice(2, 10)); // Unieke coach sessie ID
+  const lastSyncTimeRef = useRef(0); // Timestamp laatste succesvolle PUT
+  const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -78,6 +82,8 @@ export function useMatchState() {
     subHistory,
     injuryTime,
     isRunning, isPaused, halfBreak,
+    _coachId: coachIdRef.current,
+    _updatedAt: Date.now(),
   }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime]);
 
   const syncToServer = useCallback(() => {
@@ -93,6 +99,7 @@ export function useMatchState() {
           body: JSON.stringify(snapshot),
         });
         setSyncError(null);
+        lastSyncTimeRef.current = Date.now();
         // Flush pending events die eerder gefaald zijn
         if (pendingEventsRef.current.length > 0) {
           const pending = [...pendingEventsRef.current];
@@ -131,9 +138,53 @@ export function useMatchState() {
     }
   }, [isOnline, matchCode]);
 
-  // Sync bij elke relevante state wijziging
+  // --- Multi-coach sync: adopteer server state van andere coach ---
+  const applyServerSnapshot = useCallback((data) => {
+    isAdoptingRef.current = true;
+
+    // Live match state
+    setOnField(data.onField || []);
+    setOnBench(data.onBench || []);
+    setPlayTime(data.playTime || {});
+    setHomeScore(data.homeScore || 0);
+    setAwayScore(data.awayScore || 0);
+    setGoalScorers(data.goalScorers || {});
+    setCurrentHalf(data.currentHalf || 1);
+    setHalfBreak(data.halfBreak || false);
+    setInjuryTime(data.injuryTime || false);
+    setMatchKeeper(data.matchKeeper || data.keeper || null);
+    setSubHistory(data.subHistory || []);
+    setIsRunning(data.isRunning || false);
+    setIsPaused(data.isPaused || false);
+
+    // Timer: herbereken vanuit server timestamps
+    if (data.timerStartedAt && data.isRunning && !data.isPaused && !data.halfBreak) {
+      const elapsed = Math.floor((Date.now() - new Date(data.timerStartedAt).getTime()) / 1000);
+      setMatchTimer(elapsed);
+      matchTimerRef.current = elapsed;
+      const subElapsed = data.subTimerStartedAt
+        ? Math.floor((Date.now() - new Date(data.subTimerStartedAt).getTime()) / 1000)
+        : 0;
+      setSubTimer(subElapsed);
+    } else {
+      setMatchTimer(data.elapsedAtPause || 0);
+      matchTimerRef.current = data.elapsedAtPause || 0;
+      setSubTimer(data.subElapsedAtPause || 0);
+    }
+
+    // Sub alert sluiten (andere coach heeft gewisseld of overgeslagen)
+    if (showSubAlert) {
+      setShowSubAlert(false);
+    }
+    alertShownRef.current = false;
+
+    // Anti-echo: reset na React batch update
+    setTimeout(() => { isAdoptingRef.current = false; }, 0);
+  }, [showSubAlert]);
+
+  // Sync bij elke relevante state wijziging (anti-echo: skip als we server state adopteren)
   useEffect(() => {
-    if (isOnline && matchCode && view !== VIEWS.SETUP) syncToServer();
+    if (isOnline && matchCode && view !== VIEWS.SETUP && !isAdoptingRef.current) syncToServer();
   }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view]);
 
   // --- Online wedstrijd aanmaken ---
@@ -245,6 +296,28 @@ export function useMatchState() {
     return () => clearInterval(iv);
   }, [isOnline, matchCode, isRunning, isPaused, halfBreak, syncToServer]);
 
+  // --- Multi-coach polling: adopteer wijzigingen van andere coaches ---
+  useEffect(() => {
+    if (!isOnline || !matchCode || view === VIEWS.SETUP) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/match/${matchCode}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        // Viewer count altijd updaten
+        if (data.viewers !== undefined) setViewers(data.viewers);
+        // Skip eigen updates
+        if (data._coachId === coachIdRef.current) return;
+        // Skip als ouder dan onze laatste push
+        if (data._updatedAt && data._updatedAt < lastSyncTimeRef.current) return;
+        // Andere coach heeft gewijzigd: adopteer
+        applyServerSnapshot(data);
+      } catch { /* ignore */ }
+    };
+    const iv = setInterval(poll, 3000);
+    return () => clearInterval(iv);
+  }, [isOnline, matchCode, view, applyServerSnapshot]);
+
   // Half end + sub alert detection
   useEffect(() => {
     if (!isRunning || isPaused || halfBreak) return;
@@ -290,7 +363,11 @@ export function useMatchState() {
     addEvent({ type: 'sub_auto', time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] });
   };
 
-  const skipSubs = () => { setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false; };
+  const skipSubs = () => {
+    setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false;
+    addEvent({ type: 'sub_skipped', time: fmt(matchTimer), half: currentHalf });
+    syncToServer();
+  };
 
   const forceEndHalf = () => {
     clearInterval(intervalRef.current);
@@ -370,48 +447,21 @@ export function useMatchState() {
       if (!res.ok) return false;
       const data = await res.json();
 
-      // Herstel alle match state
+      // Setup state (niet in applyServerSnapshot)
       setMatchCode(code);
       setIsOnline(true);
       setTeam(data.team || '');
       setHomeTeam(data.homeTeam || 'Dilettant');
       setAwayTeam(data.awayTeam || '');
       setPlayers(data.players || []);
-      setMatchKeeper(data.matchKeeper || data.keeper || null);
       setKeeper(data.matchKeeper || data.keeper || null);
       setPlayersOnField(data.playersOnField || 5);
       setHalfDuration(data.halfDuration || 20);
       setHalves(data.halves || 2);
       setSubInterval(data.subInterval || 5);
-      setOnField(data.onField || []);
-      setOnBench(data.onBench || []);
-      setHomeScore(data.homeScore || 0);
-      setAwayScore(data.awayScore || 0);
-      setCurrentHalf(data.currentHalf || 1);
-      setPlayTime(data.playTime || {});
-      setHalfBreak(data.halfBreak || false);
-      setGoalScorers(data.goalScorers || {});
-      setSubHistory(data.subHistory || []);
-      setInjuryTime(data.injuryTime || false);
 
-      // Timer herstel
-      if (data.timerStartedAt && data.isRunning && !data.isPaused && !data.halfBreak) {
-        // Wedstrijd loopt: bereken verstreken tijd
-        const elapsed = Math.floor((Date.now() - new Date(data.timerStartedAt).getTime()) / 1000);
-        setMatchTimer(elapsed);
-        const subElapsed = data.subTimerStartedAt
-          ? Math.floor((Date.now() - new Date(data.subTimerStartedAt).getTime()) / 1000)
-          : 0;
-        setSubTimer(subElapsed);
-        setIsRunning(true);
-        setIsPaused(false);
-      } else {
-        // Gepauzeerd of gestopt
-        setMatchTimer(data.elapsedAtPause || 0);
-        setSubTimer(data.subElapsedAtPause || 0);
-        setIsRunning(data.isRunning || false);
-        setIsPaused(data.isPaused || false);
-      }
+      // Live match state + timer via gedeelde functie
+      applyServerSnapshot(data);
 
       // Status → view
       if (data.status === 'ended') {
@@ -420,14 +470,12 @@ export function useMatchState() {
       } else {
         setView(VIEWS.MATCH);
       }
-
-      alertShownRef.current = false;
       return true;
     } catch (err) {
       console.error('Reconnect error:', err);
       return false;
     }
-  }, []);
+  }, [applyServerSnapshot]);
 
   return {
     // Setup state
@@ -449,7 +497,7 @@ export function useMatchState() {
     pasteText, setPasteText, pasteResult, setPasteResult,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
-    coachName, setCoachName,
+    coachName, setCoachName, viewers,
     createOnlineMatch, updateScore, reconnectToMatch, addEvent,
     // Computed
     totalMatchTime,

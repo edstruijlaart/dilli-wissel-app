@@ -21,6 +21,7 @@ export default function MatchView({ state }) {
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
+    viewers,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -29,8 +30,6 @@ export default function MatchView({ state }) {
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
-  const [viewers, setViewers] = useState(0);
-  const viewerPollRef = useRef(null);
   const wakeLockRef = useRef(null);
   const subAlertTimeRef = useRef(null);
   const [subAlertUrgent, setSubAlertUrgent] = useState(false);
@@ -96,19 +95,6 @@ export default function MatchView({ state }) {
       }
     };
   }, [isRunning, isPaused, halfBreak]);
-
-  useEffect(() => {
-    if (!isOnline || !matchCode) return;
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/match/${matchCode}`);
-        if (res.ok) { const d = await res.json(); setViewers(d.viewers || 0); }
-      } catch { /* ignore */ }
-    };
-    poll();
-    viewerPollRef.current = setInterval(poll, 10000);
-    return () => clearInterval(viewerPollRef.current);
-  }, [isOnline, matchCode]);
 
   const handleGoal = (side) => {
     if (side === 'home') {
