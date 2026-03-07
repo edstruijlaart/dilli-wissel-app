@@ -306,6 +306,8 @@ export function useMatchState() {
         const data = await res.json();
         // Viewer count altijd updaten
         if (data.viewers !== undefined) setViewers(data.viewers);
+        // Skip als server geen coach sync bevat (initiële create data)
+        if (!data._coachId) return;
         // Skip eigen updates
         if (data._coachId === coachIdRef.current) return;
         // Skip als ouder dan onze laatste push
