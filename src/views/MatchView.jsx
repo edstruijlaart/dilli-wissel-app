@@ -20,7 +20,7 @@ export default function MatchView({ state }) {
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
-    matchCode, isOnline, syncError, startTimer, coachName, addEvent,
+    matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -79,8 +79,17 @@ export default function MatchView({ state }) {
 
     requestWakeLock();
 
+    // Re-request wake lock wanneer tab weer zichtbaar wordt
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && isRunning && !isPaused && !halfBreak) {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     // Cleanup bij unmount
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (wakeLockRef.current) {
         wakeLockRef.current.release().catch(() => {});
         wakeLockRef.current = null;
@@ -171,11 +180,8 @@ export default function MatchView({ state }) {
           </div>
           {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
           {isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
-            const eligible = onField.filter(p => p !== matchKeeper);
-            if (eligible.length === 0) return null;
-            const n = Math.min(onBench.length, Math.max(1, onBench.length));
-            const nextOut = [...eligible].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0)).slice(0, n);
-            const nextIn = [...onBench].sort((a, b) => (playTime[a] || 0) - (playTime[b] || 0)).slice(0, n);
+            const { out: nextOut, inn: nextIn } = calculateSubs();
+            if (nextOut.length === 0) return null;
             return (
               <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(217,119,6,0.04)", border: `1px solid ${T.warnDim}` }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: T.warn, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Volgende wissel</div>

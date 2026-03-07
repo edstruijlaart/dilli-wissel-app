@@ -31,10 +31,12 @@ function getInitialRoute() {
   return { mode: MODES.HOME, code: null };
 }
 
+const _initRoute = getInitialRoute();
+
 export default function App() {
   const state = useMatchState();
-  const [mode, setMode] = useState(() => getInitialRoute().mode);
-  const [viewerCode, setViewerCode] = useState(() => getInitialRoute().code);
+  const [mode, setMode] = useState(() => _initRoute.mode);
+  const [viewerCode, setViewerCode] = useState(() => _initRoute.code);
   const [reconnecting, setReconnecting] = useState(false);
   const reconnectAttempted = useRef(false);
 

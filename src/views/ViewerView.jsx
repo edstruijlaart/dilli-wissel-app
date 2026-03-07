@@ -16,6 +16,7 @@ export default function ViewerView({ code, onBack }) {
   const [goalToast, setGoalToast] = useState(null);
   const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
   const prevEventsLen = useRef(-1); // -1 = nog niet geïnitialiseerd
+  const goalToastTimeoutRef = useRef(null);
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
   useEffect(() => {
@@ -41,23 +42,28 @@ export default function ViewerView({ code, onBack }) {
     const newEvents = events.slice(prevEventsLen.current);
     prevEventsLen.current = events.length;
 
+    // Verwerk ALLE goal events (niet alleen de eerste)
+    let lastGoalMsg = null;
+    let lastGoalType = null;
     for (const ev of newEvents) {
       if (ev.type === 'goal_home') {
         fireConfetti();
         notifyGoal();
-        setGoalType('home');
-        const msg = ev.scorer ? `DOELPUNT! ${ev.scorer} scoort!` : 'DOELPUNT!';
-        setGoalToast(msg);
-        setTimeout(() => setGoalToast(null), 4000);
-        break;
+        lastGoalType = 'home';
+        lastGoalMsg = ev.scorer ? `DOELPUNT! ${ev.scorer} scoort!` : 'DOELPUNT!';
       }
       if (ev.type === 'goal_away') {
         fireConfetti('sad');
-        setGoalType('away');
-        setGoalToast('Tegendoelpunt...');
-        setTimeout(() => setGoalToast(null), 4000);
-        break;
+        lastGoalType = 'away';
+        lastGoalMsg = 'Tegendoelpunt...';
       }
+    }
+    // Toon alleen de laatste goal toast (voorkom overlap)
+    if (lastGoalMsg) {
+      clearTimeout(goalToastTimeoutRef.current);
+      setGoalType(lastGoalType);
+      setGoalToast(lastGoalMsg);
+      goalToastTimeoutRef.current = setTimeout(() => setGoalToast(null), 4000);
     }
   }, [events]);
 
@@ -108,7 +114,6 @@ export default function ViewerView({ code, onBack }) {
           {goalToast}
         </div>
       )}
-      <style>{`@keyframes goalIn { from { opacity:0; transform:translateX(-50%) scale(0.7) translateY(-20px); } to { opacity:1; transform:translateX(-50%) scale(1) translateY(0); } }`}</style>
       <div style={{ maxWidth: 440, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
@@ -254,11 +259,6 @@ function MatchSummary({ match, events, code, onBack }) {
 
   return (
     <div style={{ ...base, padding: "16px 16px 80px" }}>
-      <style>{`
-        @keyframes summaryIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes scaleIn { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }
-        .sum-row { animation: summaryIn 0.5s ease-out both; }
-      `}</style>
       <div style={{ maxWidth: 440, margin: "0 auto" }}>
 
         {/* Header */}

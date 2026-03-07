@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.7.x
+**Status**: Actief productie — v3.8.x
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -34,7 +34,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.7.x
+├── package.json                  # v3.8.x
 ├── vite.config.js                # Vite + React + PWA config
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand

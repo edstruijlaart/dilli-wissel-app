@@ -52,6 +52,8 @@ export function useMatchState() {
   const alertShownRef = useRef(false);
   const syncTimeoutRef = useRef(null);
   const timerStartRef = useRef(null); // Timestamp wanneer timer start
+  const matchTimerRef = useRef(0); // Huidige matchTimer waarde voor interval closure
+  const pendingEventsRef = useRef([]); // Queue voor gefaalde event syncs
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -65,6 +67,7 @@ export function useMatchState() {
     playersOnField, halfDuration, halves, subInterval,
     onField, onBench,
     homeScore, awayScore,
+    goalScorers,
     currentHalf,
     // Timer sync via timestamps
     timerStartedAt: (isRunning && !isPaused && !halfBreak) ? new Date(Date.now() - matchTimer * 1000).toISOString() : null,
@@ -72,8 +75,10 @@ export function useMatchState() {
     subTimerStartedAt: (isRunning && !isPaused && !halfBreak) ? new Date(Date.now() - subTimer * 1000).toISOString() : null,
     subElapsedAtPause: subTimer,
     playTime,
+    subHistory,
+    injuryTime,
     isRunning, isPaused, halfBreak,
-  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime]);
+  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -88,6 +93,22 @@ export function useMatchState() {
           body: JSON.stringify(snapshot),
         });
         setSyncError(null);
+        // Flush pending events die eerder gefaald zijn
+        if (pendingEventsRef.current.length > 0) {
+          const pending = [...pendingEventsRef.current];
+          pendingEventsRef.current = [];
+          for (const ev of pending) {
+            try {
+              await fetch(`/api/match/events/${matchCode}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ev),
+              });
+            } catch {
+              pendingEventsRef.current.push(ev);
+            }
+          }
+        }
       } catch (err) {
         console.error('Sync error:', err);
         setSyncError('Sync mislukt');
@@ -97,14 +118,16 @@ export function useMatchState() {
 
   const addEvent = useCallback(async (event) => {
     if (!isOnline || !matchCode) return;
+    const ev = { ...event, id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
     try {
       await fetch(`/api/match/events/${matchCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(event),
+        body: JSON.stringify(ev),
       });
     } catch (err) {
       console.error('Event sync error:', err);
+      pendingEventsRef.current.push(ev);
     }
   }, [isOnline, matchCode]);
 
@@ -157,7 +180,7 @@ export function useMatchState() {
     if (bench.length === 0) return { out: [], inn: [] };
     const el = field.filter(p => p !== kp);
     if (el.length === 0) return { out: [], inn: [] };
-    const n = Math.min(bench.length, Math.max(1, bench.length));
+    const n = bench.length;
     return { out: [...el].sort((a, b) => (pt[b] || 0) - (pt[a] || 0)).slice(0, n), inn: [...bench].sort((a, b) => (pt[a] || 0) - (pt[b] || 0)).slice(0, n) };
   }, []);
 
@@ -188,20 +211,21 @@ export function useMatchState() {
     if (isRunning && !isPaused && !halfBreak) {
       // Sla huidige staat op bij pause/resume
       if (!timerStartRef.current) {
-        timerStartRef.current = Date.now() - (matchTimer * 1000);
+        timerStartRef.current = Date.now() - (matchTimerRef.current * 1000);
       }
 
       intervalRef.current = setInterval(() => {
         // Bereken tijd vanaf timestamp (beschermt tegen schermvergrendeling)
         const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
-        const prevMatchTimer = matchTimer;
+        const delta = elapsed - matchTimerRef.current;
+        matchTimerRef.current = elapsed;
 
         setMatchTimer(elapsed);
-        setSubTimer(prev => prev + (elapsed - prevMatchTimer));
+        setSubTimer(prev => prev + delta);
         setOnField(cf => {
           setPlayTime(prev => {
             const n = { ...prev };
-            cf.forEach(p => (n[p] = (n[p] || 0) + (elapsed - prevMatchTimer)));
+            cf.forEach(p => (n[p] = (n[p] || 0) + delta));
             return n;
           });
           return cf;
@@ -212,7 +236,7 @@ export function useMatchState() {
       timerStartRef.current = null;
     }
     return () => clearInterval(intervalRef.current);
-  }, [isRunning, isPaused, halfBreak, matchTimer]);
+  }, [isRunning, isPaused, halfBreak]);
 
   // Periodieke sync elke 10 seconden (voor playTime updates)
   useEffect(() => {
@@ -317,11 +341,25 @@ export function useMatchState() {
         notifyGoal();
         if (scorer) setGoalScorers(prev => ({ ...prev, [scorer]: (prev[scorer] || 0) + 1 }));
         addEvent({ type: 'goal_home', time: fmt(matchTimer), half: currentHalf, scorer: scorer || null });
+      } else if (delta < 0 && homeScore > 0) {
+        // Verwijder laatste scorer
+        setGoalScorers(prev => {
+          const updated = { ...prev };
+          const scorers = Object.entries(updated).filter(([, v]) => v > 0);
+          if (scorers.length > 0) {
+            const [lastScorer] = scorers[scorers.length - 1];
+            updated[lastScorer] = updated[lastScorer] - 1;
+            if (updated[lastScorer] <= 0) delete updated[lastScorer];
+          }
+          return updated;
+        });
+        addEvent({ type: 'goal_removed_home', time: fmt(matchTimer), half: currentHalf });
       }
     } else {
       const newScore = Math.max(0, awayScore + delta);
       setAwayScore(newScore);
       if (delta > 0) addEvent({ type: 'goal_away', time: fmt(matchTimer), half: currentHalf });
+      else if (delta < 0 && awayScore > 0) addEvent({ type: 'goal_removed_away', time: fmt(matchTimer), half: currentHalf });
     }
   };
 
@@ -352,6 +390,9 @@ export function useMatchState() {
       setCurrentHalf(data.currentHalf || 1);
       setPlayTime(data.playTime || {});
       setHalfBreak(data.halfBreak || false);
+      setGoalScorers(data.goalScorers || {});
+      setSubHistory(data.subHistory || []);
+      setInjuryTime(data.injuryTime || false);
 
       // Timer herstel
       if (data.timerStartedAt && data.isRunning && !data.isPaused && !data.halfBreak) {
@@ -415,6 +456,6 @@ export function useMatchState() {
     // Actions
     addPlayer, removePlayer, movePlayer, toggleKeeper,
     startMatch, startTimer, executeSubs, skipSubs, forceEndHalf, startNextHalf,
-    manualSub, swapKeeper, setIsRunning,
+    manualSub, swapKeeper, setIsRunning, calculateSubs,
   };
 }

@@ -9,19 +9,24 @@ export function useMatchPolling(code) {
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef(null);
   const lastEventCount = useRef(0);
+  const lastFetchId = useRef(0); // Sequence check: negeer out-of-order responses
 
   const fetchMatch = useCallback(async () => {
     if (!code) return;
+    const fetchId = ++lastFetchId.current;
     try {
       const res = await fetch(`/api/match/${code.toUpperCase()}`);
+      if (fetchId !== lastFetchId.current) return; // Stale response, negeer
       if (!res.ok) { setError('Wedstrijd niet gevonden'); setLoading(false); return; }
       const data = await res.json();
+      if (fetchId !== lastFetchId.current) return; // Stale response, negeer
       setMatch(data);
       setError(null);
       setLoading(false);
 
       // Events ophalen als er iets veranderd kan zijn
       const evRes = await fetch(`/api/match/events/${code.toUpperCase()}`);
+      if (fetchId !== lastFetchId.current) return; // Stale response, negeer
       if (evRes.ok) {
         const evData = await evRes.json();
         if (evData.length !== lastEventCount.current) {

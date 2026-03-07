@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, btnP, btnS } from '../theme';
 import DilliLogo from '../components/DilliLogo';
 import Icons from '../components/Icons';
@@ -13,6 +13,8 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
   const [coachCode, setCoachCode] = useState('');
   const [coachError, setCoachError] = useState('');
   const [checking, setChecking] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [coachName, setCoachName] = useState('');
   const [verifiedTeamData, setVerifiedTeamData] = useState(null);
@@ -148,7 +150,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
 
   const shareMatch = async (match, e) => {
     e.stopPropagation(); // Voorkom match click
-    const url = `${window.location.origin}?join=${match.code}`;
+    const url = `${window.location.origin}/join/${match.code}`;
     const text = `Kijk live mee met de wedstrijd!\n${match.homeTeam} - ${match.awayTeam}\n\nKlik op deze link:\n${url}`;
 
     if (navigator.share) {
@@ -163,10 +165,16 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     }
   };
 
+  const showToast = (msg) => {
+    clearTimeout(toastTimer.current);
+    setToast(msg);
+    toastTimer.current = setTimeout(() => setToast(null), 2500);
+  };
+
   const copyToClipboard = (text) => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        alert('Link gekopieerd!');
+        showToast('Link gekopieerd!');
       }).catch(() => {
         fallbackCopy(text);
       });
@@ -182,7 +190,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     textarea.select();
     document.execCommand('copy');
     document.body.removeChild(textarea);
-    alert('Link gekopieerd!');
+    showToast('Link gekopieerd!');
   };
 
   return (
@@ -495,6 +503,17 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)",
+          background: T.text, color: "#FFF", padding: "10px 20px", borderRadius: 12,
+          fontSize: 14, fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.2)", zIndex: 10000,
+          animation: "fadeIn 0.2s ease-out"
+        }}>
+          {toast}
         </div>
       )}
     </div>
