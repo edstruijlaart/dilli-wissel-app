@@ -68,11 +68,29 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     if (val.length === 4) onJoin(val);
   };
 
-  const handleStartOnline = () => {
+  const handleStartOnline = async () => {
     const saved = localStorage.getItem('dilli_coach');
     if (saved) {
       try {
         const data = JSON.parse(saved);
+        // Haal verse spelerslijst op van server (admin kan spelers hebben gewijzigd)
+        if (data.code) {
+          try {
+            const res = await fetch('/api/auth/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: data.code }),
+            });
+            if (res.ok) {
+              const fresh = await res.json();
+              if (fresh.valid && fresh.players?.length) {
+                data.players = fresh.players;
+                data.team = fresh.team || data.team;
+                localStorage.setItem('dilli_coach', JSON.stringify(data));
+              }
+            }
+          } catch { /* Offline of fout: gebruik cached data */ }
+        }
         onStartOnline(data);
       } catch {
         onStartOnline({});
@@ -96,7 +114,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
       });
       const data = await res.json();
       if (data.valid) {
-        const teamData = { team: data.team || null, players: data.players || [] };
+        const teamData = { team: data.team || null, players: data.players || [], code: coachCode.trim() };
         setVerifiedTeamData(teamData);
         setShowCoachCode(false);
         setShowNamePrompt(true);

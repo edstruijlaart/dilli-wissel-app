@@ -56,7 +56,7 @@ export default function SetupView({ state, onStartMatch }) {
     return () => document.removeEventListener("visibilitychange", handler);
   });
 
-  const canStart = players.length > playersOnField;
+  const canStart = players.length > playersOnField && !!keeper;
 
   return (
     <div style={base}>
@@ -166,7 +166,7 @@ export default function SetupView({ state, onStartMatch }) {
         </div>
 
         <button onClick={onStartMatch} disabled={!canStart} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, opacity: canStart ? 1 : 0.3, cursor: canStart ? "pointer" : "not-allowed", boxShadow: canStart ? "0 4px 16px rgba(22,163,74,0.25)" : "none" }}>
-          {!canStart ? `Nog ${Math.max(1, playersOnField - players.length + 1)} speler${playersOnField - players.length + 1 !== 1 ? "s" : ""} nodig` : "Start wedstrijd →"}
+          {!canStart ? (players.length > playersOnField && !keeper ? "Wijs eerst een keeper aan" : `Nog ${Math.max(1, playersOnField - players.length + 1)} speler${playersOnField - players.length + 1 !== 1 ? "s" : ""} nodig`) : "Start wedstrijd →"}
         </button>
       </div>
     </div>
