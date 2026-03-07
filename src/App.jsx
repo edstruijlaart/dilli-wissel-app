@@ -172,7 +172,7 @@ export default function App() {
         />
       )}
       {mode === MODES.SETUP && (
-        <SetupView state={state} onStartMatch={handleSetupDone} />
+        <SetupView state={state} onStartMatch={handleSetupDone} onBack={goHome} />
       )}
       {mode === MODES.MATCH && (
         <MatchView state={state} />

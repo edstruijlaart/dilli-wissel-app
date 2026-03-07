@@ -7,7 +7,7 @@ import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Stepper from '../components/Stepper';
 
-export default function SetupView({ state, onStartMatch }) {
+export default function SetupView({ state, onStartMatch, onBack }) {
   const {
     players, setPlayers, keeper, setKeeper, newPlayer, setNewPlayer,
     playersOnField, setPlayersOnField, halfDuration, setHalfDuration,
@@ -61,6 +61,12 @@ export default function SetupView({ state, onStartMatch }) {
   return (
     <div style={base}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "16px 16px 32px" }}>
+        {onBack && (
+          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: "8px 0", display: "flex", alignItems: "center", gap: 6, color: T.textDim, fontSize: 14, fontFamily: "'DM Sans',sans-serif", fontWeight: 500 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            Terug
+          </button>
+        )}
         <div style={{ textAlign: "center", padding: "24px 0 20px" }}>
           <DilliLogo size={72} />
           <div style={{ fontSize: 13, fontWeight: 600, color: T.accent, letterSpacing: 3, textTransform: "uppercase", marginTop: 8, marginBottom: 4 }}>Dilli Wissel App</div>
