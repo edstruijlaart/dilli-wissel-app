@@ -185,7 +185,7 @@ export function useMatchState() {
   // Sync bij elke relevante state wijziging (anti-echo: skip als we server state adopteren)
   useEffect(() => {
     if (isOnline && matchCode && view !== VIEWS.SETUP && !isAdoptingRef.current) syncToServer();
-  }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view]);
+  }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view, matchCode]);
 
   // --- Online wedstrijd aanmaken ---
   const createOnlineMatch = useCallback(async () => {
