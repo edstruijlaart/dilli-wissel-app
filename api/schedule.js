@@ -54,11 +54,17 @@ export default async function handler(req, res) {
     let data = await apiRes.json();
 
     // Filter op team als opgegeven
+    // Match alleen als de club + team in dezelfde teamnaam voorkomen
+    // (voorkomt false positives als "Capelle JO8-2" bij zoeken naar Dilettant JO8-2)
     if (team) {
-      data = data.filter(m =>
-        m.thuisClubEnTeamNaamFriendly?.toLowerCase().includes(team.toLowerCase()) ||
-        m.uitClubEnTeamNaamFriendly?.toLowerCase().includes(team.toLowerCase())
-      );
+      const clubLower = club.toLowerCase();
+      const teamLower = team.toLowerCase();
+      data = data.filter(m => {
+        const thuis = m.thuisClubEnTeamNaamFriendly?.toLowerCase() || '';
+        const uit = m.uitClubEnTeamNaamFriendly?.toLowerCase() || '';
+        return (thuis.includes(clubLower) && thuis.includes(teamLower)) ||
+               (uit.includes(clubLower) && uit.includes(teamLower));
+      });
     }
 
     // Alleen relevante velden teruggeven (kleiner response)
