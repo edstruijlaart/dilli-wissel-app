@@ -8,7 +8,6 @@ import Badge from '../components/Badge';
 import DilliLogo from '../components/DilliLogo';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
-import LiveAudio from '../components/LiveAudio';
 import PhotoCapture from '../components/PhotoCapture';
 import { VIEWS } from '../hooks/useMatchState';
 
@@ -26,13 +25,31 @@ export default function MatchView({ state }) {
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [audioRefresh, setAudioRefresh] = useState(0);
-  const [liveAudioError, setLiveAudioError] = useState(null);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [viewers, setViewers] = useState(0);
   const viewerPollRef = useRef(null);
   const wakeLockRef = useRef(null);
+  const subAlertTimeRef = useRef(null);
+  const [subAlertUrgent, setSubAlertUrgent] = useState(false);
+
+  // Vergeten wissel: escaleer urgentie als sub alert langer dan 30s open staat
+  useEffect(() => {
+    if (showSubAlert) {
+      subAlertTimeRef.current = Date.now();
+      setSubAlertUrgent(false);
+      const timer = setTimeout(() => {
+        setSubAlertUrgent(true);
+        vibrate([300, 100, 300, 100, 300]);
+      }, 30000);
+      return () => clearTimeout(timer);
+    } else {
+      subAlertTimeRef.current = null;
+      setSubAlertUrgent(false);
+    }
+  }, [showSubAlert]);
 
   // Wake Lock: voorkom schermvergrendeling tijdens wedstrijd
   useEffect(() => {
@@ -43,8 +60,8 @@ export default function MatchView({ state }) {
           try {
             await wakeLockRef.current.release();
             wakeLockRef.current = null;
-          } catch (err) {
-            console.log('Wake lock release error:', err);
+          } catch {
+            // Wake lock release failed — not critical
           }
         }
         return;
@@ -54,9 +71,8 @@ export default function MatchView({ state }) {
       if ('wakeLock' in navigator) {
         try {
           wakeLockRef.current = await navigator.wakeLock.request('screen');
-          console.log('Wake lock activated - scherm blijft aan');
-        } catch (err) {
-          console.log('Wake lock failed:', err);
+        } catch {
+          // Wake lock not supported or failed — not critical
         }
       }
     };
@@ -153,6 +169,26 @@ export default function MatchView({ state }) {
             <span style={{ color: T.textMuted }}>Rest: {fmt(Math.max(0, hr))}</span>
             {onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
+          {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
+          {isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
+            const eligible = onField.filter(p => p !== matchKeeper);
+            if (eligible.length === 0) return null;
+            const n = Math.min(onBench.length, Math.max(1, onBench.length));
+            const nextOut = [...eligible].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0)).slice(0, n);
+            const nextIn = [...onBench].sort((a, b) => (playTime[a] || 0) - (playTime[b] || 0)).slice(0, n);
+            return (
+              <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(217,119,6,0.04)", border: `1px solid ${T.warnDim}` }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.warn, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Volgende wissel</div>
+                {nextOut.map((p, i) => (
+                  <div key={i} style={{ fontSize: 12, color: T.textDim, display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontWeight: 600, color: T.text }}>{p}</span>
+                    <span style={{ color: T.textMuted }}>→</span>
+                    <span style={{ fontWeight: 600, color: T.text }}>{nextIn[i]}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
             {!isRunning ? (
               <button onClick={startTimer} style={{ ...btnP, padding: "16px 0", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}>
@@ -166,7 +202,7 @@ export default function MatchView({ state }) {
                 <button onClick={() => setShowKeeperPicker(!showKeeperPicker)} style={{ ...btnS, padding: "10px 14px", display: "flex", alignItems: "center", gap: 6, borderColor: showKeeperPicker ? T.keeperDim : T.glassBorder }}>
                   {Icons.glove(14, T.keeper)}
                 </button>
-                <button onClick={() => { setIsRunning(false); setView(VIEWS.SUMMARY); }} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
+                <button onClick={() => setShowStopConfirm(true)} style={{ ...btnD, padding: "10px 16px" }}>Stop</button>
               </div>
             )}
             {isRunning && !halfBreak && (
@@ -198,21 +234,6 @@ export default function MatchView({ state }) {
           </div>
         </div>
 
-        {/* Live Audio Streaming */}
-        {isOnline && matchCode && isRunning && !halfBreak && (
-          <>
-            <LiveAudio matchCode={matchCode} isCoach={true} onError={(err) => {
-              console.error('Live audio error:', err);
-              setLiveAudioError(err);
-            }} />
-            {liveAudioError && (
-              <div style={{ padding: 12, marginBottom: 10, background: 'rgba(220,38,38,0.1)', border: `1px solid ${T.dangerDim}`, borderRadius: 12 }}>
-                <p style={{ fontSize: 11, color: T.danger, margin: 0 }}>Error: {liveAudioError}</p>
-              </div>
-            )}
-          </>
-        )}
-
         {/* Audio & Photo Buttons */}
         {isOnline && matchCode && isRunning && !halfBreak && (
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -235,31 +256,34 @@ export default function MatchView({ state }) {
               <span style={{ fontSize: 14, fontWeight: 700, color: T.keeper }}>Keeper wisselen</span>
               <button onClick={() => setShowKeeperPicker(false)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", display: "flex", padding: 4 }}>{Icons.x(14, T.textMuted)}</button>
             </div>
-            <p style={{ fontSize: 12, color: T.textDim, marginBottom: 10 }}>Kies de nieuwe keeper uit veld of bank</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {onField.map(p => {
-                const isK = p === matchKeeper;
-                return (
-                  <button key={p} onClick={() => !isK && swapKeeper(p)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: isK ? "rgba(217,119,6,0.08)" : T.glass, border: `1px solid ${isK ? T.keeperDim : T.glassBorder}`, cursor: isK ? "default" : "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif", color: T.text, width: "100%", transition: "all 0.15s" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {isK && Icons.glove(14, T.keeper)}
-                      <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
-                      {isK && <Badge variant="keeper">Nu keeper</Badge>}
-                    </div>
-                    {!isK && <span style={{ fontSize: 12, color: T.keeper, fontWeight: 600 }}>Maak keeper →</span>}
-                  </button>
-                );
-              })}
+              {/* Huidige keeper */}
+              {matchKeeper && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 10, background: "rgba(217,119,6,0.08)", border: `1px solid ${T.keeperDim}` }}>
+                  {Icons.glove(14, T.keeper)}
+                  <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{matchKeeper}</span>
+                  <Badge variant="keeper">Huidige keeper</Badge>
+                </div>
+              )}
+              {/* Veldspelers: wissel van positie (geen in/uit) */}
+              <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginTop: 10, marginBottom: 2, paddingLeft: 4 }}>Veldspeler wordt keeper (ruilt positie)</div>
+              {onField.filter(p => p !== matchKeeper).map(p => (
+                <button key={p} onClick={() => swapKeeper(p)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif", color: T.text, width: "100%", transition: "all 0.15s" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
+                  <span style={{ fontSize: 11, color: T.keeper, fontWeight: 600 }}>{Icons.glove(12, T.keeper)} Maak keeper</span>
+                </button>
+              ))}
+              {/* Bankspelers: wissel IN als keeper */}
               {onBench.length > 0 && (
                 <>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginTop: 8, marginBottom: 2, paddingLeft: 4 }}>Bank</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginTop: 10, marginBottom: 2, paddingLeft: 4 }}>Bankspeler komt erin als keeper</div>
                   {onBench.map(p => (
                     <button key={p} onClick={() => swapKeeper(p)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}`, cursor: "pointer", textAlign: "left", fontFamily: "'DM Sans',sans-serif", color: T.text, width: "100%", transition: "all 0.15s" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
                         <Badge variant="bench">Bank</Badge>
                       </div>
-                      <span style={{ fontSize: 12, color: T.keeper, fontWeight: 600 }}>Maak keeper →</span>
+                      <span style={{ fontSize: 11, color: T.keeper, fontWeight: 600 }}>{Icons.glove(12, T.keeper)} Wissel in als keeper</span>
                     </button>
                   ))}
                 </>
@@ -278,30 +302,45 @@ export default function MatchView({ state }) {
           </div>
         )}
 
-        {/* Sub alert */}
+        {/* Sub alert - full screen overlay */}
         {showSubAlert && !halfBreak && (
-          <div style={{ ...card, padding: 20, marginBottom: 10, borderColor: T.warnDim, background: "rgba(217,119,6,0.04)", animation: "slideIn 0.2s ease" }}>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <div style={{ marginBottom: 4 }}>{Icons.whistle(30, T.warn)}</div>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: T.warn, margin: 0 }}>Tijd om te wisselen!</h2>
-              <p style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>Klok loopt door — neem de tijd</p>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-              {suggestedSubs.out.map((p, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderRadius: 10, background: T.glass, border: `1px solid ${T.glassBorder}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {Icons.arrowDown(14)} <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 1100,
+            background: subAlertUrgent ? "rgba(220,38,38,0.15)" : "rgba(217,119,6,0.08)",
+            backdropFilter: "blur(12px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20,
+            animation: subAlertUrgent ? "urgentPulse 1s ease infinite" : "none",
+          }}>
+            <div style={{
+              background: T.card, border: `2px solid ${subAlertUrgent ? T.danger : T.warn}`,
+              borderRadius: 24, padding: 28, width: "100%", maxWidth: 380,
+              animation: "slideIn .3s ease", boxShadow: `0 20px 60px rgba(0,0,0,0.2), 0 0 40px ${subAlertUrgent ? 'rgba(220,38,38,0.2)' : 'rgba(217,119,6,0.15)'}`,
+            }}>
+              <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 48, marginBottom: 8 }}>{subAlertUrgent ? '🚨' : '🔄'}</div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: subAlertUrgent ? T.danger : T.warn, margin: 0 }}>
+                  {subAlertUrgent ? 'WISSEL NU!' : 'Tijd om te wisselen!'}
+                </h2>
+                <p style={{ fontSize: 13, color: T.textMuted, marginTop: 6 }}>Klok loopt door</p>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                {suggestedSubs.out.map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: T.glass, border: `1px solid ${T.glassBorder}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {Icons.arrowDown(14)} <span style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{p}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
+                    </div>
+                    <span style={{ color: T.textMuted, fontSize: 18 }}>→</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>{suggestedSubs.inn[i]}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[suggestedSubs.inn[i]] || 0)}</span> {Icons.arrowUp(14)}
+                    </div>
                   </div>
-                  <span style={{ color: T.textMuted }}>→</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>{suggestedSubs.inn[i]}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[suggestedSubs.inn[i]] || 0)}</span> {Icons.arrowUp(14)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={executeSubs} style={{ ...btnP, flex: 1, padding: "12px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{Icons.check(16, "#FFFFFF")} Wissel!</button>
-              <button onClick={skipSubs} style={{ ...btnS, padding: "12px 16px" }}>Sla over</button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={executeSubs} style={{ ...btnP, flex: 1, padding: "16px 0", fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}>{Icons.check(18, "#FFFFFF")} Wissel!</button>
+                <button onClick={skipSubs} style={{ ...btnS, padding: "16px 20px", fontSize: 14 }}>Sla over</button>
+              </div>
             </div>
           </div>
         )}
@@ -390,6 +429,32 @@ export default function MatchView({ state }) {
                 <button onClick={() => setShowEndHalfConfirm(false)}
                   style={{ ...btnS, padding: "12px 20px", fontSize: 14 }}>
                   Annuleer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stop confirmation */}
+        {showStopConfirm && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowStopConfirm(false); }}>
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "slideIn .25s", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 32, marginBottom: 4 }}>🛑</div>
+                <h3 style={{ color: T.danger, fontSize: 18, fontWeight: 700, margin: 0 }}>Wedstrijd stoppen?</h3>
+                <p style={{ fontSize: 13, color: T.textMuted, marginTop: 8, marginBottom: 0 }}>
+                  Dit beëindigt de hele wedstrijd. Je kunt hierna niet meer verder spelen.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setShowStopConfirm(false)}
+                  style={{ ...btnS, flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 700 }}>
+                  Nee, ga door
+                </button>
+                <button onClick={() => { setShowStopConfirm(false); setIsRunning(false); setView(VIEWS.SUMMARY); }}
+                  style={{ ...btnD, padding: "14px 20px", fontSize: 14 }}>
+                  Ja, stop
                 </button>
               </div>
             </div>

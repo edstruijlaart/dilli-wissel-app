@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.6.x
+**Status**: Actief productie — v3.7.x
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -22,7 +22,6 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 | Styling | Inline CSS-in-JS | Geen build-stap voor styles |
 | Fonts | Google Fonts | DM Sans + JetBrains Mono |
 | Audio (tonen) | Tone.js 14 | Fluitsignalen |
-| Live audio | LiveKit (`livekit-client` + `livekit-server-sdk`) | WebRTC audio streaming coach → kijkers |
 | Data (match state) | Vercel KV (`@upstash/redis`) | Match state + events (TTL 8 uur) |
 | Data (audio/foto) | Vercel Blob (`@vercel/blob`) | Audio webm + JPEG foto's |
 | API | Vercel Serverless Functions | `/api/match/*` routes |
@@ -35,7 +34,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.6.x
+├── package.json                  # v3.7.x
 ├── vite.config.js                # Vite + React + PWA config
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
@@ -62,8 +61,6 @@ dilli-wissel-app/
 │       │   └── [code].js        # GET/POST: event log (goals, wissels, foto's, audio_start)
 │       ├── audio/
 │       │   └── [code].js        # GET/POST/DELETE: audio messages (Vercel Blob)
-│       ├── audio-token/
-│       │   └── [code].js        # POST: LiveKit JWT token genereren
 │       └── photo/
 │           └── upload.js        # POST/DELETE: foto upload (Vercel Blob, BLOB2 token)
 │
@@ -98,11 +95,6 @@ dilli-wissel-app/
     │   │                         # Coach (isCoach=true): alle updates, × delete knop voor audio + foto
     │   │                         # Viewer (maxItems=1): alleen laatste update ("Laatste Update")
     │   │                         # Polt elke 10s (audio via Blob list, foto's via events API)
-    │   ├── LiveAudio.jsx         # LiveKit WebRTC audio streaming
-    │   │                         # Coach: start/stop microfoon, mute knop, luisteraars teller
-    │   │                         # Viewer: verbindt alleen als er echt audio tracks zijn (geen false positive)
-    │   │                         #   → 5s timeout: geen stream → status 'no_stream'
-    │   │                         #   → TrackSubscribed: pas dan status 'connected'
     │   └── PhotoCapture.jsx      # Camera + bibliotheek foto upload (coach)
     │                             # Props: matchCode, onClose, onPhotoUploaded({url, caption})
     │                             # Features: camera (environment-facing), bibliotheek kiezen,
@@ -117,7 +109,6 @@ dilli-wissel-app/
         │                         #   Online indicator (code, viewers)
         │                         #   Timer card (helft, tijd, progressbar, wissel countdown)
         │                         #   Scoreboard (+ doelpuntscorer popup)
-        │                         #   Live Audio component (coach zend, viewers luisteren)
         │                         #   Audio + Foto knoppen (alleen tijdens lopende wedstrijd)
         │                         #   Keeper picker
         │                         #   Rust kaart (als halfBreak)
@@ -130,13 +121,11 @@ dilli-wissel-app/
         │                         #   Header (team, code, status indicator)
         │                         #   Timer
         │                         #   Score
-        │                         #   Live Audio (Luister live mee knop)
         │                         #   Laatste Update (AudioTimeline maxItems=1)
         │                         #   Rust kaart
         │                         #   Veld (read-only)
         │                         #   Bank (read-only)
         │                         #   Gebeurtenissen (goals + wissels, geen foto's)
-        │                         #   Subtiele banner bij stream start (+5s auto-dismiss)
         ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis
         └── AdminView.jsx         # Admin panel: wedstrijden beheren
 ```
@@ -153,7 +142,6 @@ dilli-wissel-app/
 - **Keeper swap**: andere keeper aanwijzen tijdens wedstrijd
 - **Audio update**: opnemen (webm), optioneel bericht (60 tekens), upload naar Vercel Blob
 - **Foto**: camera of bibliotheek, compressie, optionele caption (80 tekens), upload
-- **Live audio**: WebRTC via LiveKit, coach zendt microfoon uit, viewers luisteren
 - **Updates beheren**: alle audio/foto updates zien, verwijderen (× knop)
 - **Confetti + geluid + vibratie**: bij doelpunten
 - **Wake lock**: scherm blijft aan tijdens wedstrijd
@@ -161,11 +149,8 @@ dilli-wissel-app/
 ### Kijker
 - **Live volgen**: score, timer, veld/bank bezetting via polling (5s interval)
 - **Laatste update**: meest recente audio of foto bovenaan
-- **Luister live mee**: als coach live audio uitzend (WebRTC, automatisch starten)
 - **Doelpunt notificatie**: confetti + toast bij goals
 - **Foto's bekijken**: fullscreen tap in Updates feed
-- **Stream start banner**: subtiele groene banner als coach live gaat (+5s auto-dismiss)
-- **Geen stream melding**: duidelijke melding als er geen actieve audio stream is
 
 ---
 
@@ -181,7 +166,7 @@ Coach → PUT /api/match/{code} → Redis (TTL 8u)
 ### Events (Vercel KV)
 ```
 Coach addEvent() → POST /api/match/events/{code} → Redis array
-  - type: 'goal_home' | 'goal_away' | 'sub' | 'photo' | 'live_audio_start'
+  - type: 'goal_home' | 'goal_away' | 'sub' | 'photo'
   - time, half, url (foto), caption (foto), scorer (goal)
 ```
 
@@ -203,17 +188,6 @@ Coach → PhotoCapture → POST /api/match/photo/upload
   → Vercel Blob opgeslagen als: match-{code}-{timestamp}.jpg
 ```
 
-### Live Audio (LiveKit WebRTC)
-```
-Coach → POST /api/match/audio-token/{code} → JWT token
-Coach → LiveKit Room (publish mic)
-             ↓
-Viewer → POST /api/match/audio-token/{code} → JWT token
-Viewer → LiveKit Room (subscribe)
-  → 5s timeout: als geen audio tracks → 'no_stream'
-  → TrackSubscribed → 'connected' (echte audio)
-```
-
 ---
 
 ## Vercel Environment Variables
@@ -224,9 +198,6 @@ Viewer → LiveKit Room (subscribe)
 | `KV_REST_API_TOKEN` | Vercel KV token |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob (audio) |
 | `BLOB2_READ_WRITE_TOKEN` | Vercel Blob (foto's, apart store) |
-| `LIVEKIT_URL` | LiveKit server URL |
-| `LIVEKIT_API_KEY` | LiveKit API key |
-| `LIVEKIT_API_SECRET` | LiveKit API secret |
 | `ADMIN_PASSWORD` | Admin panel toegang |
 
 ---
@@ -238,7 +209,7 @@ Alle design tokens in `src/theme.js`:
 ```javascript
 T.accent      // #16A34A  — groen (primair)
 T.warn        // #D97706  — oranje (keeper, rust)
-T.danger      // #DC2626  — rood (live audio, stop)
+T.danger      // #DC2626  — rood (stop, alerts)
 T.text        // Hoofdtekst
 T.textMuted   // Subtext
 T.textDim     // Placeholder
@@ -261,7 +232,6 @@ mono    // JetBrains Mono font stijl
 | Service worker cached oude versie | Hard refresh (Cmd+Shift+R) of PWA herinstalleren |
 | `addEvent` undefined | Controleer return statement van `useMatchState.js` — alle exports moeten er in staan |
 | Foto upload mislukt | Controleer BLOB2_READ_WRITE_TOKEN in Vercel env vars |
-| Live audio "actief" zonder stream | Bug was: status 'connected' bij room connect ipv bij track ontvangst. Fix: viewers wachten op TrackSubscribed |
 | Audio message niet zichtbaar | Blob metadata via `addMetadata` — check of `blob.metadata?.message` beschikbaar is in list() |
 | foto's niet in feed | Events API URL was `/api/match/{code}/events` maar moet zijn `/api/match/events/{code}` |
 
@@ -349,14 +319,14 @@ Wijzigingen in Dilli komen NOOIT automatisch terecht in CoachCast en vice versa.
 | Pakket | Prijs | Teams | Coaches | Key features |
 |--------|-------|-------|---------|--------------|
 | **Coach Solo** | €39/seizoen | 1 | 1 | Timer, wissels, score, audio updates, kijkers live mee |
-| **Club Starter** | €149/seizoen | 5 | 5 | + Foto's, live audio streaming, eigen logo/naam, club admin |
+| **Club Starter** | €149/seizoen | 5 | 5 | + Foto's, eigen logo/naam, club admin |
 | **Club Pro** | €299/seizoen | Onbeperkt | Onbeperkt | + Volledig white-label, seizoensstatistieken, PDF export |
 
 Optioneel: jaarlicenties met 15% korting (Coach Solo €69/jaar, Starter €259/jaar, Pro €499/jaar) om churn te reduceren.
 
 ### Marktpositie
 
-**0 directe concurrenten** die speeltijdverdeling + live audio + ouder-engagement combineren.
+**0 directe concurrenten** die speeltijdverdeling + ouder-engagement combineren.
 - Spond: communicatie, geen wedstrijdbeheer
 - GameChanger: live scoring (VS, baseball), geen speeltijd
 - SubTime / Fair Play Time: speeltijd alleen, geen live, geen ouders
@@ -369,10 +339,8 @@ Optioneel: jaarlicenties met 15% korting (Coach Solo €69/jaar, Starter €259/
 |--|--------|--------|--------|
 | Omzet (realistisch) | €21.000 | €62.000 | €140.000 |
 | Hostingkosten | €1.200 | €6.600 | €6.500 |
-| Netto marge | ~94% | ~89% | ~95% (self-hosted LiveKit) |
+| Netto marge | ~94% | ~89% | ~95% |
 | Break-even | 30–40 klanten | — | — |
-
-**LiveKit:** Switch naar self-hosted Hetzner VPS (€40/mnd) zodra 50+ Club Starter klanten. Kosten dalen van ~€6.000 naar €480/jaar.
 
 ### Te Bouwen (SaaS Laag — 4–6 weken)
 
@@ -381,7 +349,7 @@ Optioneel: jaarlicenties met 15% korting (Coach Solo €69/jaar, Starter €259/
 - [ ] PostgreSQL schema (users, clubs, teams, matches, subscriptions)
 - [ ] White-label configuratie (logo upload, naam, teamnamen)
 - [ ] Mollie betaalflow (seizoensbetaling + webhook)
-- [ ] Feature gates (check subscription bij audio/foto/live audio)
+- [ ] Feature gates (check subscription bij audio/foto)
 - [ ] Club admin portal (teams + coaches beheren)
 - [ ] Coaches uitnodigen via magic link (Resend)
 - [ ] Privacy statement + verwerkersovereenkomst (GDPR, minderjarigen)
@@ -393,7 +361,6 @@ Optioneel: jaarlicenties met 15% korting (Coach Solo €69/jaar, Starter €259/
 |--------|--------|-----------|
 | Ed's beschikbare tijd | Hoog | Zero-beheer architectuur, strikte scope |
 | Seizoensgebonden churn | Hoog | Jaarlicentie optie + automatische herinnering |
-| LiveKit kosten bij schaal | Middel | Self-hosted VPS bij 50+ klanten |
 | Betalingsbereidheid | Middel | Coach Solo (€39) als laagdrempelige instap |
 | GDPR minderjarigen | Middel | Privacy statement + verwerkersovereenkomst |
 
@@ -441,11 +408,10 @@ App-UI blijft initieel **Nederlands**. Naam en domein zijn internationaal. Zo de
 | Probleem | Oplossing |
 |----------|-----------|
 | Demo-match lijkt dood (0-0, timer stil) | Cron job genereert nep-activiteit elke paar minuten |
-| Audio staat stil — juist dat verkoopt het | Pre-recorded audio loop via LiveKit bot, of toon UI zonder geluid |
+| Audio staat stil — juist dat verkoopt het | Pre-recorded audio update, of toon UI zonder geluid |
 | Iemand kaapt de demo-match (code DEMO is publiek) | Coach-route voor DEMO vergrendelen (wachtwoord of IP-check) |
 | Vercel KV TTL gooit match weg na 8 uur | Cron job reset demo-match dagelijks, of TTL uitschakelen voor demo-key |
 | Viewer-demo toont alleen output, niet de coach-kant | Screen recording toont coach-kant, live demo toont viewer-kant — beiden nodig |
 | 50-80 gelijktijdige viewers max (Vercel free tier) | Geen issue in validatiefase, upgrade pas bij schaal |
-| LiveKit free tier: ~3.300 demo-sessies/mnd | Ruim genoeg tot 50+ clubs |
 
 **Conclusie:** Fase 0 (screen recording) is de juiste first step. Fase 1 (live demo) bouw je pas als de SaaS-laag staat en je echte wedstrijden kunt doorsluizen als social proof.

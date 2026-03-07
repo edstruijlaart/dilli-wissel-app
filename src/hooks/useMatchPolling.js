@@ -49,7 +49,9 @@ export function useMatchPolling(code) {
     if (!match.timerStartedAt) return match.elapsedAtPause || 0;
     const started = new Date(match.timerStartedAt).getTime();
     const now = Date.now();
-    return (match.elapsedAtPause || 0) + Math.floor((now - started) / 1000);
+    // timerStartedAt encodeert al de volledige elapsed tijd (Date.now() - matchTimer * 1000)
+    // Dus now - timerStartedAt = matchTimer. NIET elapsedAtPause erbij optellen (double counting).
+    return Math.floor((now - started) / 1000);
   }, [match]);
 
   const getSubElapsed = useCallback(() => {
@@ -58,7 +60,7 @@ export function useMatchPolling(code) {
     if (!match.subTimerStartedAt) return match.subElapsedAtPause || 0;
     const started = new Date(match.subTimerStartedAt).getTime();
     const now = Date.now();
-    return (match.subElapsedAtPause || 0) + Math.floor((now - started) / 1000);
+    return Math.floor((now - started) / 1000);
   }, [match]);
 
   return { match, events, error, loading, getElapsed, getSubElapsed, refetch: fetchMatch };

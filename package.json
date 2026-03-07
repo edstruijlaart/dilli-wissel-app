@@ -1,7 +1,7 @@
 {
   "name": "dilli-wissel-app",
   "private": true,
-  "version": "3.6.3",
+  "version": "3.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,12 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@livekit/components-react": "^2.9.19",
     "@upstash/redis": "^1.36.2",
     "@vercel/blob": "^2.2.0",
     "@vercel/kv": "^3.0.0",
-    "livekit-client": "^2.17.1",
-    "livekit-server-sdk": "^2.15.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tone": "^14.8.49"

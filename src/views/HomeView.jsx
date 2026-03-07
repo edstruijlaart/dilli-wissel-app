@@ -16,6 +16,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
   const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [coachName, setCoachName] = useState('');
   const [verifiedTeamData, setVerifiedTeamData] = useState(null);
+  const [pendingJoinMatch, setPendingJoinMatch] = useState(null);
   const [loggedInTeam, setLoggedInTeam] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dilli_coach'))?.team || null; } catch { return null; }
   });
@@ -118,13 +119,15 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     setShowNamePrompt(false);
 
     // Als we een wedstrijd geselecteerd hebben → join als coach
-    if (selectedMatch && onJoinAsCoach) {
-      onJoinAsCoach(selectedMatch.code).then(success => {
+    if ((selectedMatch || pendingJoinMatch) && onJoinAsCoach) {
+      const joinCode = selectedMatch?.code || pendingJoinMatch;
+      onJoinAsCoach(joinCode).then(success => {
         if (!success) {
           setCoachError('Wedstrijd niet gevonden');
           setShowCoachCode(true);
         }
         setSelectedMatch(null);
+        setPendingJoinMatch(null);
       });
     } else {
       // Anders nieuwe wedstrijd starten
@@ -348,9 +351,42 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                   {Icons.eye(20, "#FFF")}
                   Kijk live mee
                 </button>
-                {/* Secundair: Coach login (klein) */}
+                {/* Mee-coachen voor ingelogde coaches */}
+                {loggedInTeam && (
+                  <button
+                    onClick={() => {
+                      onJoinAsCoach(selectedMatch.code).then(success => {
+                        if (!success) {
+                          setCoachError('Kon niet mee-coachen');
+                        }
+                        setShowCoachCode(false);
+                        setSelectedMatch(null);
+                      });
+                    }}
+                    style={{
+                      ...btnS,
+                      width: "100%",
+                      padding: "14px 20px",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: T.accent,
+                      borderColor: T.accentDim,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      marginBottom: 8
+                    }}
+                  >
+                    📋 Mee-coachen
+                  </button>
+                )}
+                {/* Coach login (voor niet-ingelogde coaches) */}
                 <button
-                  onClick={() => setSelectedMatch(null)}
+                  onClick={() => {
+                    setPendingJoinMatch(selectedMatch.code);
+                    setSelectedMatch(null);
+                  }}
                   style={{
                     background: "none",
                     border: "none",
@@ -362,7 +398,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                     padding: "8px 0"
                   }}
                 >
-                  Ben je coach? Klik hier
+                  {loggedInTeam ? 'Ander account?' : 'Ben je coach? Klik hier'}
                 </button>
               </>
             ) : (
@@ -391,7 +427,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 {coachError && <p style={{ fontSize: 12, color: T.danger, marginTop: 8, fontWeight: 600 }}>{coachError}</p>}
                 <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                   <button
-                    onClick={() => { setShowCoachCode(false); setSelectedMatch(null); }}
+                    onClick={() => { setShowCoachCode(false); setSelectedMatch(null); setPendingJoinMatch(null); }}
                     style={{ ...btnS, flex: 1, padding: "12px 16px" }}
                   >
                     Annuleren
@@ -445,7 +481,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
             />
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button
-                onClick={() => { setShowNamePrompt(false); setCoachName(''); setVerifiedTeamData(null); }}
+                onClick={() => { setShowNamePrompt(false); setCoachName(''); setVerifiedTeamData(null); setPendingJoinMatch(null); }}
                 style={{ ...btnS, flex: 1, padding: "12px 16px" }}
               >
                 Annuleren

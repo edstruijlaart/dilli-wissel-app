@@ -8,16 +8,14 @@ import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Icons from '../components/Icons';
 import AudioTimeline from '../components/AudioTimeline';
-import LiveAudio from '../components/LiveAudio';
+
 
 export default function ViewerView({ code, onBack }) {
   const { match, events, error, loading, getElapsed, getSubElapsed } = useMatchPolling(code);
   const [timer, setTimer] = useState(0);
   const [goalToast, setGoalToast] = useState(null);
   const [goalType, setGoalType] = useState('home'); // 'home' | 'away'
-  const [streamBanner, setStreamBanner] = useState(false);
   const prevEventsLen = useRef(-1); // -1 = nog niet geïnitialiseerd
-  const prevLiveAudio = useRef(null);
 
   // Lokale timer die elke seconde tikt (niet afhankelijk van polling)
   useEffect(() => {
@@ -62,26 +60,6 @@ export default function ViewerView({ code, onBack }) {
       }
     }
   }, [events]);
-
-  // Detecteer live audio stream start
-  useEffect(() => {
-    if (!match || !match.isRunning || match.halfBreak) {
-      prevLiveAudio.current = null;
-      return;
-    }
-
-    // Check if live audio event was added
-    const liveAudioEvents = events.filter(ev => ev.type === 'live_audio_start');
-    const hasLiveAudio = liveAudioEvents.length > 0;
-
-    if (hasLiveAudio && prevLiveAudio.current === false) {
-      // Stream just started!
-      setStreamBanner(true);
-      setTimeout(() => setStreamBanner(false), 5000);
-    }
-
-    prevLiveAudio.current = hasLiveAudio;
-  }, [events, match]);
 
   const elapsed = getElapsed();
   const subElapsed = getSubElapsed();
@@ -173,11 +151,6 @@ export default function ViewerView({ code, onBack }) {
           </div>
         </div>
 
-        {/* Live Audio Streaming */}
-        {match.isRunning && !match.halfBreak && (
-          <LiveAudio matchCode={code} isCoach={false} onError={(err) => console.error('Live audio error:', err)} />
-        )}
-
         {/* Audio Timeline - Only show latest update for viewers */}
         <AudioTimeline matchCode={code} maxItems={1} />
 
@@ -222,11 +195,11 @@ export default function ViewerView({ code, onBack }) {
         )}
 
         {/* Event feed - only non-photo events (goals, subs, etc.) */}
-        {events.filter(ev => ev.type !== 'photo').length > 0 && (
+        {events.filter(ev => isVisibleEvent(ev) && formatEvent(ev) !== null).length > 0 && (
           <div style={{ ...card, padding: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Gebeurtenissen</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {[...events].filter(ev => ev.type !== 'photo').reverse().slice(0, 20).map((ev, i) => (
+              {[...events].filter(ev => isVisibleEvent(ev) && formatEvent(ev) !== null).reverse().slice(0, 20).map((ev, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.textDim }}>
                   <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 40 }}>{ev.time || ''}</span>
                   <span>{formatEvent(ev)}</span>
@@ -236,38 +209,6 @@ export default function ViewerView({ code, onBack }) {
           </div>
         )}
 
-        {/* Stream start banner (subtle) */}
-        {streamBanner && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 80,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: 'linear-gradient(135deg, #16A34A, #22C55E)',
-              color: '#FFF',
-              padding: '12px 24px',
-              borderRadius: 12,
-              fontSize: 13,
-              fontWeight: 600,
-              zIndex: 9999,
-              boxShadow: '0 4px 16px rgba(22,163,74,0.3)',
-              animation: 'slideDown 0.3s ease-out',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#FFF', animation: 'pulse 1.5s infinite' }} />
-            Live audio is nu actief
-          </div>
-        )}
-        <style>{`
-          @keyframes slideDown {
-            from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-            to { opacity: 1; transform: translateX(-50%) translateY(0); }
-          }
-        `}</style>
       </div>
     </div>
   );
@@ -424,6 +365,32 @@ function MatchSummary({ match, events, code, onBack }) {
           </div>
         )}
 
+        {/* Speeltijd */}
+        {match.players && match.playTime && (() => {
+          const sorted = [...match.players].sort((a, b) => (match.playTime[b] || 0) - (match.playTime[a] || 0));
+          const max = Math.max(...Object.values(match.playTime), 1);
+          return (
+            <div style={{ ...card, padding: 16, marginBottom: 14, animation: "summaryIn 0.5s ease-out 0.35s both" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>Speeltijd</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {sorted.map(p => {
+                  const t = match.playTime[p] || 0;
+                  const m = Math.floor(t / 60);
+                  return (
+                    <div key={p} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.text, minWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p}</span>
+                      <div style={{ flex: 1, height: 8, background: T.glass, borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${(t / max) * 100}%`, background: `linear-gradient(90deg, ${T.accent}, ${T.accent}88)`, borderRadius: 4, transition: "width 0.6s ease" }} />
+                      </div>
+                      <span style={{ ...mono, fontSize: 11, color: T.textMuted, minWidth: 32, textAlign: "right" }}>{m}'</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Deel uitslag */}
         <button onClick={() => shareResult(match, events)} style={{
           width: "100%", padding: "14px 24px",
@@ -493,17 +460,27 @@ function shareResult(match, events) {
   }
 }
 
+// Event types die niet getoond worden aan kijkers
+const HIDDEN_VIEWER_EVENTS = ['photo'];
+
+function isVisibleEvent(ev) {
+  return !HIDDEN_VIEWER_EVENTS.includes(ev.type);
+}
+
 function formatEvent(ev) {
   switch (ev.type) {
     case 'match_start': return 'Wedstrijd gestart';
     case 'half_start': return `Helft ${ev.half} gestart`;
+    case 'half_end': return `Einde helft ${ev.half}`;
+    case 'half_end_manual': return `Einde helft ${ev.half}`;
     case 'goal_home': return `Doelpunt${ev.scorer ? ` ${ev.scorer}` : ''}!`;
     case 'goal_away': return 'Tegendoelpunt';
     case 'sub_auto': return `Wissel: ${(ev.out || []).join(', ')} eruit → ${(ev.inn || []).join(', ')} erin`;
-    case 'sub_manual': return `Handmatige wissel: ${(ev.out || []).join(', ')} ↔ ${(ev.inn || []).join(', ')}`;
+    case 'sub_manual': return `Wissel: ${(ev.out || []).join(', ')} ↔ ${(ev.inn || []).join(', ')}`;
     case 'keeper_change': return `Nieuwe keeper: ${ev.newKeeper}`;
-    case 'photo': return '📷 Foto toegevoegd';
+    case 'injury_time_start': return 'Blessuretijd';
     case 'match_end': return 'Wedstrijd afgelopen';
-    default: return ev.type;
+    case 'match_end_manual': return 'Wedstrijd afgelopen';
+    default: return null; // Onbekende events niet tonen
   }
 }

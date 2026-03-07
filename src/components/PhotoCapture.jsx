@@ -82,8 +82,6 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
 
     // Convert to JPEG base64 (quality: 0.8 for smaller file size)
     const imageData = canvas.toDataURL('image/jpeg', 0.8);
-    console.log('Captured photo size:', Math.round(imageData.length / 1024), 'KB');
-
     setPhotoData(imageData);
 
     // Stop camera stream
@@ -130,8 +128,6 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
         ctx.drawImage(img, 0, 0, width, height);
 
         const imageData = canvas.toDataURL('image/jpeg', 0.8);
-        console.log('Library photo size:', Math.round(imageData.length / 1024), 'KB');
-
         setPhotoData(imageData);
         setStatus('captured');
       };
@@ -152,10 +148,6 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
     setError(null);
 
     try {
-      console.log('Uploading photo to:', '/api/match/photo/upload');
-      console.log('Match code:', matchCode);
-      console.log('Image size:', Math.round(photoData.length / 1024), 'KB');
-
       const res = await fetch('/api/match/photo/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,8 +158,6 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
           caption: caption.trim(),
         }),
       });
-
-      console.log('Response status:', res.status);
 
       if (!res.ok) {
         const text = await res.text();
@@ -183,7 +173,6 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
       }
 
       const data = await res.json();
-      console.log('Upload success:', data);
       onPhotoUploaded({ url: data.url, caption: caption.trim() });
       onClose();
     } catch (err) {
