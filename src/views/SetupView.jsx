@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { T, base, card, btnP, btnS, mono } from '../theme';
 import { parseNames } from '../utils/format';
 import { vibrate } from '../utils/audio';
@@ -20,6 +20,30 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     pasteResult, setPasteResult,
     addPlayer, removePlayer, movePlayer, toggleKeeper,
   } = state;
+
+  // Schedule: volgende wedstrijd ophalen
+  const [schedule, setSchedule] = useState({ loading: false, match: null, error: null });
+
+  useEffect(() => {
+    if (!team) return;
+    setSchedule(s => ({ ...s, loading: true }));
+    fetch(`/api/schedule?team=${encodeURIComponent(team)}&weken=4`)
+      .then(r => r.ok ? r.json() : Promise.reject('API error'))
+      .then(matches => {
+        const now = new Date();
+        // Vind eerstvolgende wedstrijd (in de toekomst, geen uitslag)
+        const upcoming = matches.find(m => new Date(m.datum) >= now && !m.uitslag && !m.afgelast);
+        setSchedule({ loading: false, match: upcoming || null, error: null });
+        // Auto-fill tegenstander als het veld nog leeg is
+        if (upcoming && !awayTeam) {
+          const opponent = upcoming.isThuiswedstrijd ? upcoming.uit : upcoming.thuis;
+          // Verwijder "JM" suffix en club prefix voor mooiere naam
+          const cleanName = opponent?.replace(/JM$/, '').trim();
+          setAwayTeam(cleanName || opponent);
+        }
+      })
+      .catch(() => setSchedule({ loading: false, match: null, error: 'Kon programma niet laden' }));
+  }, [team]);
 
   const parsePastedNames = () => {
     if (!pasteText.trim()) return;
@@ -81,6 +105,47 @@ export default function SetupView({ state, onStartMatch, onBack }) {
               <div style={{ fontSize: 16, fontWeight: 700, color: T.accent }}>{team}</div>
             </div>
           )}
+
+          {/* Volgende wedstrijd uit programma */}
+          {schedule.match && (() => {
+            const m = schedule.match;
+            const d = new Date(m.datum);
+            const dag = ['zo','ma','di','wo','do','vr','za'][d.getDay()];
+            const maand = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'][d.getMonth()];
+            const tijd = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+            const thuisLogo = m.thuisLogo;
+            const uitLogo = m.uitLogo;
+            return (
+              <div style={{ marginBottom: 16, padding: 16, borderRadius: 14, background: "linear-gradient(135deg, rgba(22,163,74,0.04) 0%, rgba(22,163,74,0.08) 100%)", border: `1px solid ${T.accent}20` }}>
+                <div style={{ fontSize: 11, color: T.accent, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600 }}>📅 Volgende wedstrijd</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}>
+                    {thuisLogo ? (
+                      <img src={thuisLogo} alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 6 }} onError={e => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: 6, background: T.glass, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>⚽</div>
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text, textAlign: "center", lineHeight: 1.2 }}>{m.thuis?.replace(/JM$/, '').trim()}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: T.textMuted }}>vs</div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 1 }}>
+                    {uitLogo ? (
+                      <img src={uitLogo} alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 6 }} onError={e => { e.target.style.display = 'none'; }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: 6, background: T.glass, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>⚽</div>
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text, textAlign: "center", lineHeight: 1.2 }}>{m.uit?.replace(/JM$/, '').trim()}</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 12, fontSize: 12, color: T.textDim }}>
+                  <span>{dag} {d.getDate()} {maand} · {tijd}</span>
+                  {m.veld && <span>· {m.veld}</span>}
+                  {m.isThuiswedstrijd && <span style={{ color: T.accent }}>🏠 Thuis</span>}
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <Stepper label="In veld" value={playersOnField} set={setPlayersOnField} min={3} step={1} />
             <Stepper label="Helften" value={halves} set={setHalves} min={1} step={1} />
