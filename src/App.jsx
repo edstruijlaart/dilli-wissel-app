@@ -102,6 +102,14 @@ export default function App() {
     if (teamData?.team) state.setTeam(teamData.team);
     if (teamData?.coachName) state.setCoachName(teamData.coachName);
     if (teamData?.players?.length) state.setPlayers(teamData.players);
+    // Team-specifieke wedstrijdinstellingen toepassen
+    if (teamData?.settings) {
+      const s = teamData.settings;
+      if (s.playersOnField) state.setPlayersOnField(s.playersOnField);
+      if (s.halfDuration) state.setHalfDuration(s.halfDuration);
+      if (s.halves) state.setHalves(s.halves);
+      if (s.subInterval) state.setSubInterval(s.subInterval);
+    }
     setMode(MODES.SETUP);
   };
 

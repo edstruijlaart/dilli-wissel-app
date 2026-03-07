@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   // POST: team toevoegen of bijwerken
   if (req.method === 'POST') {
     try {
-      const { code, team, players } = req.body || {};
+      const { code, team, players, settings } = req.body || {};
       if (!code || !code.trim()) return res.status(400).json({ error: 'Code is verplicht' });
       if (!team || !team.trim()) return res.status(400).json({ error: 'Teamnaam is verplicht' });
 
@@ -65,10 +65,24 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `Teamnaam "${team.trim()}" bestaat al (code: ${duplicate[0]})` });
       }
 
-      teams[upperCode] = {
+      const teamData = {
         team: team.trim(),
         players: Array.isArray(players) ? players.map(p => p.trim()).filter(Boolean) : [],
       };
+
+      // Wedstrijdinstellingen opslaan als meegegeven
+      if (settings && typeof settings === 'object') {
+        teamData.settings = {
+          ...(settings.playersOnField != null && { playersOnField: Number(settings.playersOnField) }),
+          ...(settings.halfDuration != null && { halfDuration: Number(settings.halfDuration) }),
+          ...(settings.halves != null && { halves: Number(settings.halves) }),
+          ...(settings.subInterval != null && { subInterval: Number(settings.subInterval) }),
+        };
+        // Verwijder lege settings
+        if (Object.keys(teamData.settings).length === 0) delete teamData.settings;
+      }
+
+      teams[upperCode] = teamData;
       await saveTeams(teams);
       return res.status(200).json({ ok: true, teams });
     } catch (err) {

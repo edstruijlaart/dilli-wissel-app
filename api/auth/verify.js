@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const entry = Object.entries(teams).find(([k]) => k.toUpperCase() === input);
     if (entry) {
       const [, config] = entry;
-      return res.status(200).json({ valid: true, team: config.team || null, players: config.players || [] });
+      return res.status(200).json({ valid: true, team: config.team || null, players: config.players || [], settings: config.settings || null });
     }
     return res.status(200).json({ valid: false });
   }

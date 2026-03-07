@@ -275,13 +275,13 @@ function TeamsManager({ teams, setTeams, headers }) {
     setTimeout(() => setFeedback(''), 2500);
   };
 
-  const saveTeam = async (code, team, players) => {
+  const saveTeam = async (code, team, players, settings) => {
     setSaving(true);
     try {
       const res = await fetch('/api/admin/teams', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ code, team, players }),
+        body: JSON.stringify({ code, team, players, settings }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -350,6 +350,7 @@ function TeamsManager({ teams, setTeams, headers }) {
           saving={saving}
           existingCodes={Object.keys(teams)}
           existingTeams={teams}
+          initialSettings={{}}
         />
       )}
 
@@ -368,6 +369,7 @@ function TeamsManager({ teams, setTeams, headers }) {
               initialCode={code}
               initialTeam={config.team}
               initialPlayers={config.players}
+              initialSettings={config.settings || {}}
               onSave={saveTeam}
               onCancel={() => setEditingCode(null)}
               saving={saving}
@@ -383,6 +385,14 @@ function TeamsManager({ teams, setTeams, headers }) {
                   {config.players?.length || 0} spelers
                 </span>
               </div>
+
+              {config.settings && Object.keys(config.settings).length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {config.settings.playersOnField && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.playersOnField} in veld</span>}
+                  {config.settings.halves && config.settings.halfDuration && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.halves}×{config.settings.halfDuration}min</span>}
+                  {config.settings.subInterval && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>wissel {config.settings.subInterval}min</span>}
+                </div>
+              )}
 
               {config.players && config.players.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
@@ -421,11 +431,17 @@ function TeamsManager({ teams, setTeams, headers }) {
 
 /* ─── Team Form Component ─── */
 
-function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onSave, onCancel, saving, isEdit, existingCodes = [], existingTeams = {} }) {
+function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], initialSettings = {}, onSave, onCancel, saving, isEdit, existingCodes = [], existingTeams = {} }) {
   const [code, setCode] = useState(initialCode);
   const [team, setTeam] = useState(initialTeam);
   const [playerText, setPlayerText] = useState(initialPlayers.join(', '));
   const [error, setError] = useState('');
+
+  // Wedstrijdinstellingen (defaults = app defaults uit SetupView)
+  const [playersOnField, setPlayersOnField] = useState(initialSettings.playersOnField || '');
+  const [halfDuration, setHalfDuration] = useState(initialSettings.halfDuration || '');
+  const [halves, setHalves] = useState(initialSettings.halves || '');
+  const [subInterval, setSubInterval] = useState(initialSettings.subInterval || '');
 
   const handleSave = () => {
     if (!code.trim()) return setError('Code is verplicht');
@@ -437,7 +453,7 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onS
     // Check dubbele teamnaam (bij nieuw team of als naam gewijzigd is bij bewerken)
     const teamLower = team.trim().toLowerCase();
     const duplicate = Object.entries(existingTeams).find(([k, v]) => {
-      if (isEdit && k.toUpperCase() === initialCode.toUpperCase()) return false; // eigen team overslaan
+      if (isEdit && k.toUpperCase() === initialCode.toUpperCase()) return false;
       return (v.team || '').toLowerCase() === teamLower;
     });
     if (duplicate) {
@@ -448,13 +464,27 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onS
       .split(/[,\n]/)
       .map(p => p.trim())
       .filter(Boolean);
-    onSave(code.trim().toUpperCase(), team.trim(), players);
+
+    // Settings: alleen meesturen als ingevuld
+    const settings = {};
+    if (playersOnField !== '' && !isNaN(playersOnField)) settings.playersOnField = Number(playersOnField);
+    if (halfDuration !== '' && !isNaN(halfDuration)) settings.halfDuration = Number(halfDuration);
+    if (halves !== '' && !isNaN(halves)) settings.halves = Number(halves);
+    if (subInterval !== '' && !isNaN(subInterval)) settings.subInterval = Number(subInterval);
+
+    onSave(code.trim().toUpperCase(), team.trim(), players, Object.keys(settings).length > 0 ? settings : undefined);
   };
 
   const inputStyle = {
     width: "100%", padding: "10px 12px", borderRadius: 10,
     border: `1px solid ${T.glassBorder}`, fontSize: 14,
     fontFamily: "'DM Sans',sans-serif", boxSizing: "border-box",
+  };
+
+  const numInputStyle = {
+    width: 60, padding: "8px 6px", borderRadius: 8, textAlign: "center",
+    border: `1px solid ${T.glassBorder}`, fontSize: 15, fontWeight: 700,
+    fontFamily: "'JetBrains Mono',monospace", boxSizing: "border-box",
   };
 
   return (
@@ -518,6 +548,32 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], onS
             {playerText.split(/[,\n]/).map(p => p.trim()).filter(Boolean).length} spelers
           </div>
         )}
+      </div>
+
+      {/* Wedstrijdinstellingen */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>
+          Standaard instellingen <span style={{ fontWeight: 400, textTransform: "none" }}>(optioneel)</span>
+        </label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
+            <input type="number" value={playersOnField} onChange={e => setPlayersOnField(e.target.value)} placeholder="—" min={3} style={numInputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Helften</div>
+            <input type="number" value={halves} onChange={e => setHalves(e.target.value)} placeholder="—" min={1} style={numInputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Min / helft</div>
+            <input type="number" value={halfDuration} onChange={e => setHalfDuration(e.target.value)} placeholder="—" min={5} style={numInputStyle} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Wissel elke (min)</div>
+            <input type="number" value={subInterval} onChange={e => setSubInterval(e.target.value)} placeholder="—" min={2} style={numInputStyle} />
+          </div>
+        </div>
+        <p style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Leeg = app standaard. Ingevuld = automatisch vooringesteld bij wedstrijdstart.</p>
       </div>
 
       {error && <p style={{ fontSize: 12, color: T.danger, marginBottom: 8 }}>{error}</p>}
