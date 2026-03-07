@@ -41,6 +41,7 @@ export function useMatchState() {
   const [awayScore, setAwayScore] = useState(0);
   const [goalScorers, setGoalScorers] = useState({}); // { "Luuk": 2, "Sem": 1 }
   const [events, setEvents] = useState([]);
+  const [pendingEnd, setPendingEnd] = useState(false); // Wedstrijd wil eindigen, wacht op coach bevestiging
 
   // Multiplayer state
   const [matchCode, setMatchCode] = useState(null);
@@ -355,7 +356,7 @@ export function useMatchState() {
         setHalfBreak(true); setShowSubAlert(false); notifyHalf();
         addEvent({ type: 'half_end', time: fmt(matchTimer), half: currentHalf });
       } else {
-        setIsRunning(false); notifyEnd(); setView(VIEWS.SUMMARY);
+        setIsRunning(false); notifyEnd(); setPendingEnd(true);
         addEvent({ type: 'match_end', time: fmt(matchTimer), half: currentHalf });
       }
       return;
@@ -389,7 +390,7 @@ export function useMatchState() {
       setHalfBreak(true); setShowSubAlert(false); notifyHalf();
       addEvent({ type: 'half_end_manual', time: fmt(matchTimer), half: currentHalf });
     } else {
-      setIsRunning(false); notifyEnd(); setView(VIEWS.SUMMARY);
+      setIsRunning(false); notifyEnd(); setPendingEnd(true);
       addEvent({ type: 'match_end_manual', time: fmt(matchTimer), half: currentHalf });
     }
   };
@@ -491,6 +492,35 @@ export function useMatchState() {
     }
   }, [applyServerSnapshot]);
 
+  // Wedstrijd definitief beëindigen → naar samenvatting
+  const finalizeMatch = useCallback(() => {
+    setPendingEnd(false);
+    setView(VIEWS.SUMMARY);
+  }, []);
+
+  // Wedstrijd opslaan in team historie
+  const saveMatchToHistory = useCallback(async () => {
+    const teamName = team || homeTeam || '';
+    if (!teamName) return false;
+    try {
+      const res = await fetch('/api/match/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamName,
+          match: {
+            homeTeam, awayTeam, homeScore, awayScore,
+            playTime, goalScorers, subHistory, events,
+          },
+        }),
+      });
+      const data = await res.json();
+      return data.ok || false;
+    } catch {
+      return false;
+    }
+  }, [team, homeTeam, awayTeam, homeScore, awayScore, playTime, goalScorers, subHistory, events]);
+
   return {
     // Setup state
     players, setPlayers, keeper, setKeeper, newPlayer, setNewPlayer,
@@ -511,8 +541,9 @@ export function useMatchState() {
     pasteText, setPasteText, pasteResult, setPasteResult,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
-    coachName, setCoachName, viewers, events,
+    coachName, setCoachName, viewers, events, pendingEnd,
     createOnlineMatch, updateScore, reconnectToMatch, addEvent,
+    finalizeMatch, saveMatchToHistory,
     // Computed
     totalMatchTime,
     // Actions

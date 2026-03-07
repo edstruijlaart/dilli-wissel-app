@@ -21,7 +21,7 @@ export default function MatchView({ state }) {
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
-    viewers, events, players,
+    viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
   } = state;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
@@ -30,9 +30,16 @@ export default function MatchView({ state }) {
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [audioRefresh, setAudioRefresh] = useState(0);
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saving, setSaving] = useState(false);
   const wakeLockRef = useRef(null);
   const subAlertTimeRef = useRef(null);
   const [subAlertUrgent, setSubAlertUrgent] = useState(false);
+
+  // Wedstrijd einde: toon opslaan-dialoog wanneer pendingEnd waar wordt
+  useEffect(() => {
+    if (pendingEnd) setShowSaveDialog(true);
+  }, [pendingEnd]);
 
   // Vergeten wissel: escaleer urgentie als sub alert langer dan 30s open staat
   useEffect(() => {
@@ -509,9 +516,44 @@ export default function MatchView({ state }) {
                   style={{ ...btnS, flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 700 }}>
                   Nee, ga door
                 </button>
-                <button onClick={() => { setShowStopConfirm(false); setIsRunning(false); setView(VIEWS.SUMMARY); }}
+                <button onClick={() => { setShowStopConfirm(false); setIsRunning(false); setShowSaveDialog(true); }}
                   style={{ ...btnD, padding: "14px 20px", fontSize: 14 }}>
                   Ja, stop
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save match dialog */}
+        {showSaveDialog && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, animation: "slideIn .25s", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 32, marginBottom: 4 }}>💾</div>
+                <h3 style={{ color: T.text, fontSize: 18, fontWeight: 700, margin: 0 }}>Wedstrijd opslaan?</h3>
+                <p style={{ fontSize: 13, color: T.textMuted, marginTop: 8, marginBottom: 0 }}>
+                  Sla de wedstrijd op in de teamhistorie voor statistieken.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  disabled={saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    await saveMatchToHistory();
+                    setSaving(false);
+                    setShowSaveDialog(false);
+                    finalizeMatch();
+                  }}
+                  style={{ ...btnP, flex: 1, padding: "14px 0", fontSize: 14, fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+                  {saving ? 'Opslaan...' : 'Ja, opslaan'}
+                </button>
+                <button
+                  disabled={saving}
+                  onClick={() => { setShowSaveDialog(false); finalizeMatch(); }}
+                  style={{ ...btnS, padding: "14px 20px", fontSize: 14 }}>
+                  Nee
                 </button>
               </div>
             </div>
