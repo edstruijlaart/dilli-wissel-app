@@ -7,7 +7,6 @@ import {
   getNotificationPermission,
   subscribeToPush,
   forceResubscribe,
-  sendTestPush,
   getPushDiagnostics,
   getPushDebugLog,
   isSubscribedForMatch,
@@ -20,7 +19,7 @@ import {
  * Compact banner requesting push notification permission.
  * Shows different messages for coach vs viewer.
  * Handles iOS "install to homescreen" prompt.
- * Now with diagnostic feedback, test push button, and force re-subscribe.
+ * Now with diagnostic feedback and force re-subscribe.
  *
  * @param {{ matchCode: string, role: 'coach'|'viewer' }} props
  */
@@ -29,8 +28,6 @@ export default function PushPermissionBanner({ matchCode, role }) {
   const [subscribing, setSubscribing] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [subInfo, setSubInfo] = useState(null);
-  const [testResult, setTestResult] = useState(null);
-  const [testing, setTesting] = useState(false);
   const [showDiag, setShowDiag] = useState(false);
   const [diag, setDiag] = useState(null);
   const [showIOSTip, setShowIOSTip] = useState(false);
@@ -99,7 +96,6 @@ export default function PushPermissionBanner({ matchCode, role }) {
   async function handleForceResubscribe() {
     setSubscribing(true);
     setErrorMsg(null);
-    setTestResult(null);
     const result = await forceResubscribe(matchCode, role);
     if (result.ok) {
       markSubscribed(matchCode, role);
@@ -111,14 +107,6 @@ export default function PushPermissionBanner({ matchCode, role }) {
       setState('error');
     }
     setSubscribing(false);
-  }
-
-  async function handleTest() {
-    setTesting(true);
-    setTestResult(null);
-    const result = await sendTestPush(matchCode, role);
-    setTestResult(result);
-    setTesting(false);
   }
 
   async function handleDiag() {
@@ -156,17 +144,6 @@ export default function PushPermissionBanner({ matchCode, role }) {
             )}
           </div>
           <button
-            onClick={handleTest}
-            disabled={testing}
-            style={{
-              background: 'none', border: `1px solid ${T.border}`, color: T.text,
-              borderRadius: 8, padding: '4px 10px', fontSize: 11,
-              fontWeight: 600, cursor: 'pointer',
-              fontFamily: "'DM Sans',sans-serif",
-              opacity: testing ? 0.5 : 1,
-            }}
-          >{testing ? '...' : 'Test'}</button>
-          <button
             onClick={handleDiag}
             style={{
               background: 'none', border: 'none', color: T.textMuted,
@@ -175,18 +152,6 @@ export default function PushPermissionBanner({ matchCode, role }) {
             }}
           >ℹ️</button>
         </div>
-        {testResult && (
-          <div style={{
-            marginTop: 6, fontSize: 11, padding: '4px 8px',
-            background: testResult.ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-            borderRadius: 6, color: testResult.ok ? '#22c55e' : T.warn,
-          }}>
-            {testResult.ok
-              ? `✓ Push verstuurd naar ${testResult.sent} device(s)${testResult.expired > 0 ? ` (${testResult.expired} verlopen)` : ''}`
-              : `✗ ${testResult.error || testResult.message || testResult.reason}`
-            }
-          </div>
-        )}
         {showIOSTip && (
           <div style={{
             marginTop: 8, padding: '10px 12px',
