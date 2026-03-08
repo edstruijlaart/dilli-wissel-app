@@ -180,7 +180,7 @@ export default function MatchView({ state }) {
             <div style={{ height: "100%", width: `${Math.min(hp, 100)}%`, background: T.accent, borderRadius: 2, transition: "width 1s linear" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-            <span style={{ color: T.textMuted }}>Rest: {fmt(Math.max(0, hr))}</span>
+            <span style={{ color: T.textMuted }}>Rust: {fmt(Math.max(0, hr))}</span>
             {autoSubs && onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
           {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
