@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.15.0
+**Status**: Actief productie — v3.18.0
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -34,7 +34,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.14.0
+├── package.json                  # v3.18.0
 ├── vite.config.js                # Vite + React + PWA config
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
@@ -85,7 +85,10 @@ dilli-wissel-app/
     │
     ├── hooks/
     │   ├── useMatchState.js      # CENTRALE STATE: alle wedstrijd state + wisselalgoritme
-    │   │                         # Exporteert: addEvent, updateScore, startTimer, etc.
+    │   │                         # Exporteert: addEvent, updateScore, startTimer, executeSubs,
+    │   │                         #   skipSubs, editSubProposal, excludePlayer, swapKeeper, etc.
+    │   │                         # Pure functions: generateSubSchedule(), recalculateRemainingSlots()
+    │   │                         # State: subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot
     │   └── useMatchPolling.js    # Viewer polling: GET /api/match/{code} elke 5s
     │                             # Returnt: match, events, getElapsed(), getSubElapsed()
     │
@@ -125,9 +128,11 @@ dilli-wissel-app/
         │                         #   Audio + Foto knoppen (alleen tijdens lopende wedstrijd)
         │                         #   Keeper picker
         │                         #   Rust kaart (als halfBreak)
-        │                         #   Wissel alert (automatisch)
+        │                         #   Wissel alert (editable dropdowns, skip-waarschuwing)
         │                         #   Veld (spelers in het veld, klik voor handmatige wissel)
-        │                         #   Bank (bankspelers)
+        │                         #   Bank (bankspelers) + excluded players banner
+        │                         #   Wisselschema preview (inklapbaar, status per slot)
+        │                         #   Blessure/Uitsluiting knop + injury picker overlay
         │                         #   Updates feed (AudioTimeline isCoach=true, onderaan)
         ├── ViewerView.jsx        # KIJKER LIVE VIEW
         │                         # Volgorde van boven naar onder:
@@ -139,7 +144,9 @@ dilli-wissel-app/
         │                         #   Veld (read-only)
         │                         #   Bank (read-only)
         │                         #   Gebeurtenissen (goals + wissels, geen foto's)
-        ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis, wedstrijd opslaan
+        ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis,
+        │                         #   schema-adherence stats (uitgevoerd/overgeslagen/%),
+        │                         #   excluded players, wedstrijd opslaan
         ├── AdminView.jsx         # Admin panel: wedstrijden + teams beheren
         └── SecretariaatView.jsx  # Secretariaat: programma (VoetbalAssist), live wedstrijden, kleedkamers
 ```
@@ -152,11 +159,21 @@ dilli-wissel-app/
 - **Setup**: spelers invoeren (handmatig of clipboard paste), keeper aanwijzen, config instellen
 - **Live timer**: helft/halves, progressbar, wissel countdown, pause, blessuretijd
 - **Score**: +/- knoppen, doelpuntscorer popup (wie scoorde?)
-- **Wissels**: automatische wisseladviezen op interval, handmatig tap-to-sub
+- **Wisselalgoritme** (v3.18.0): pre-berekend wisselschema voor maximale eerlijke speeltijd
+  - `generateSubSchedule()` berekent volledig schema bij match start over alle helften
+  - `subsPerSlot = max(1, min(B, min(fieldSlots, round(B*I/D))))` — optimaal aantal wissels per moment
+  - Editable sub alert: coach kan wisselparen aanpassen via dropdowns (met duplicate prevention)
+  - Latency-compensatie: `subTimer` start op overshoot waarde, niet op 0
+  - Schema herberekening bij: skip, blessure, edit, keeper-swap
+  - Skip-waarschuwing na 2+ overgeslagen wissels
+  - Wisselschema preview: inklapbaar overzicht met status icons (✅ ⏭️ 🔄 ⏳)
+  - Blessure/Uitsluiting: speler mid-match uit pool halen, auto-vervanging + schema herberekening
+  - Schema-adherence statistieken in SummaryView (uitgevoerd/overgeslagen/percentage)
+  - Handmatig tap-to-sub blijft beschikbaar naast schema
 - **Multi-coach sync**: meerdere coaches delen dezelfde wedstrijd, server is single source of truth.
   Coaches pollen elke 3s, adopteren wijzigingen van andere coaches (score, wissels, helft, timer).
   Anti-echo guards (`_coachId` + `isAdoptingRef`) voorkomen sync-loops.
-- **Keeper swap**: andere keeper aanwijzen tijdens wedstrijd
+- **Keeper swap**: andere keeper aanwijzen tijdens wedstrijd (triggert schema herberekening bij bank→veld swap)
 - **Audio update**: opnemen (webm), optioneel bericht (60 tekens), upload naar Vercel Blob
 - **Foto**: camera of bibliotheek, compressie, optionele caption (80 tekens), upload
 - **Updates beheren**: alle audio/foto updates zien, verwijderen (× knop)
