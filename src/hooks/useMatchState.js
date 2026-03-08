@@ -173,6 +173,8 @@ export function useMatchState() {
   const [showKeeperPicker, setShowKeeperPicker] = useState(false);
   const [homeTeam, setHomeTeam] = useState("Dilettant");
   const [awayTeam, setAwayTeam] = useState("");
+  const [homeLogo, setHomeLogo] = useState(null); // URL van clublogo thuisteam (via VoetbalAssist API)
+  const [awayLogo, setAwayLogo] = useState(null); // URL van clublogo uitteam
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [goalScorers, setGoalScorers] = useState({}); // { "Luuk": 2, "Sem": 1 }
@@ -218,7 +220,7 @@ export function useMatchState() {
     status: view === VIEWS.MATCH ? (halfBreak ? 'halftime' : isRunning ? (isPaused ? 'paused' : 'live') : 'ended') : view === VIEWS.SUMMARY ? 'ended' : 'setup',
     team,
     coachName,
-    homeTeam, awayTeam,
+    homeTeam, awayTeam, homeLogo, awayLogo,
     players, keeper: matchKeeper,
     matchKeeper,
     playersOnField, halfDuration, halves, subInterval,
@@ -242,7 +244,7 @@ export function useMatchState() {
     showSubAlert, suggestedSubs,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
-  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
+  }), [view, team, coachName, homeTeam, awayTeam, homeLogo, awayLogo, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -366,7 +368,7 @@ export function useMatchState() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          team, homeTeam, awayTeam, players, keeper,
+          team, homeTeam, awayTeam, homeLogo, awayLogo, players, keeper,
           playersOnField, halfDuration, halves, subInterval,
         }),
       });
@@ -391,7 +393,7 @@ export function useMatchState() {
       setSyncError('Wedstrijd aanmaken mislukt');
       return null;
     }
-  }, [team, homeTeam, awayTeam, players, keeper, playersOnField, halfDuration, halves, subInterval]);
+  }, [team, homeTeam, awayTeam, homeLogo, awayLogo, players, keeper, playersOnField, halfDuration, halves, subInterval]);
 
   // --- Bestaande logica ---
   const addPlayer = () => { const n = newPlayer.trim(); if (n && !players.includes(n)) { setPlayers([...players, n]); setNewPlayer(""); } };
@@ -849,6 +851,8 @@ export function useMatchState() {
       setTeam(data.team || '');
       setHomeTeam(data.homeTeam || 'Dilettant');
       setAwayTeam(data.awayTeam || '');
+      setHomeLogo(data.homeLogo || null);
+      setAwayLogo(data.awayLogo || null);
       setPlayers(data.players || []);
       setKeeper(data.matchKeeper || data.keeper || null);
       setPlayersOnField(data.playersOnField || 5);
@@ -927,6 +931,7 @@ export function useMatchState() {
     playersOnField, setPlayersOnField, halfDuration, setHalfDuration,
     halves, setHalves, subInterval, setSubInterval,
     homeTeam, setHomeTeam, awayTeam, setAwayTeam,
+    homeLogo, setHomeLogo, awayLogo, setAwayLogo,
     team, setTeam,
     // Match state
     view, setView, onField, onBench, playTime, currentHalf,

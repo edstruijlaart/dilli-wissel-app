@@ -21,7 +21,7 @@ export default function MatchView({ state }) {
     isRunning, isPaused, setIsPaused, showSubAlert, suggestedSubs,
     halfBreak, injuryTime, manualSubMode, setManualSubMode, matchKeeper,
     showKeeperPicker, setShowKeeperPicker,
-    homeTeam, awayTeam, homeScore, awayScore, goalScorers,
+    homeTeam, awayTeam, homeLogo, awayLogo, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
@@ -237,6 +237,7 @@ export default function MatchView({ state }) {
         {/* Scoreboard */}
         <div style={{ ...card, padding: "12px 16px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ flex: 1, textAlign: "center" }}>
+            {homeLogo && <img src={homeLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{homeTeam || "Thuis"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <button onClick={() => updateScore('home', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
@@ -246,6 +247,7 @@ export default function MatchView({ state }) {
           </div>
           <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300, padding: "0 4px" }}>–</div>
           <div style={{ flex: 1, textAlign: "center" }}>
+            {awayLogo && <img src={awayLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{awayTeam || "Uit"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
               <button onClick={() => updateScore('away', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>

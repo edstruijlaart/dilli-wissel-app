@@ -151,11 +151,13 @@ export default function ViewerView({ code, onBack }) {
         {/* Score */}
         <div style={{ ...card, padding: "16px 20px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
           <div style={{ textAlign: "center", flex: 1 }}>
+            {match.homeLogo && <img src={match.homeLogo} alt="" style={{ width: 32, height: 32, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 12, color: T.textDim, fontWeight: 600, marginBottom: 4 }}>{match.homeTeam || 'Thuis'}</div>
             <div style={{ ...mono, fontSize: 40, fontWeight: 800, color: T.text }}>{match.homeScore}</div>
           </div>
           <div style={{ fontSize: 16, color: T.textMuted, fontWeight: 300 }}>—</div>
           <div style={{ textAlign: "center", flex: 1 }}>
+            {match.awayLogo && <img src={match.awayLogo} alt="" style={{ width: 32, height: 32, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 12, color: T.textDim, fontWeight: 600, marginBottom: 4 }}>{match.awayTeam || 'Uit'}</div>
             <div style={{ ...mono, fontSize: 40, fontWeight: 800, color: T.text }}>{match.awayScore}</div>
           </div>
@@ -305,11 +307,13 @@ function MatchSummary({ match, events, code, onBack }) {
         {/* Eindstand */}
         <div style={{ ...card, padding: "20px 24px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 20, animation: "summaryIn 0.5s ease-out 0.1s both" }}>
           <div style={{ textAlign: "center", flex: 1 }}>
+            {match.homeLogo && <img src={match.homeLogo} alt="" style={{ width: 36, height: 36, objectFit: "contain", marginBottom: 6 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 13, color: T.textDim, fontWeight: 600, marginBottom: 6 }}>{match.homeTeam || 'Thuis'}</div>
             <div style={{ ...mono, fontSize: 52, fontWeight: 800, color: T.text, lineHeight: 1 }}>{match.homeScore}</div>
           </div>
           <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300 }}>—</div>
           <div style={{ textAlign: "center", flex: 1 }}>
+            {match.awayLogo && <img src={match.awayLogo} alt="" style={{ width: 36, height: 36, objectFit: "contain", marginBottom: 6 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 13, color: T.textDim, fontWeight: 600, marginBottom: 6 }}>{match.awayTeam || 'Uit'}</div>
             <div style={{ ...mono, fontSize: 52, fontWeight: 800, color: T.text, lineHeight: 1 }}>{match.awayScore}</div>
           </div>

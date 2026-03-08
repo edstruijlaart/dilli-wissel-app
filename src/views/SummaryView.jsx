@@ -5,7 +5,7 @@ import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 export default function SummaryView({ state, onNewMatch }) {
-  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore, matchCode, subSchedule, excludedPlayers } = state;
+  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeLogo, awayLogo, homeScore, awayScore, matchCode, subSchedule, excludedPlayers } = state;
   const [goalEvents, setGoalEvents] = useState([]);
 
   // Haal doelpunten op van server voor share-functie
@@ -29,11 +29,13 @@ export default function SummaryView({ state, onNewMatch }) {
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Afgelopen!</h1>
           <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
             <div style={{ textAlign: "center" }}>
+              {homeLogo && <img src={homeLogo} alt="" style={{ width: 32, height: 32, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
               <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>{homeTeam || "Thuis"}</div>
               <div style={{ ...mono, fontSize: 36, fontWeight: 700 }}>{homeScore}</div>
             </div>
             <span style={{ fontSize: 20, color: T.textMuted, fontWeight: 300 }}>–</span>
             <div style={{ textAlign: "center" }}>
+              {awayLogo && <img src={awayLogo} alt="" style={{ width: 32, height: 32, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
               <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>{awayTeam || "Uit"}</div>
               <div style={{ ...mono, fontSize: 36, fontWeight: 700 }}>{awayScore}</div>
             </div>

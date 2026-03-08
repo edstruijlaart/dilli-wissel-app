@@ -107,9 +107,11 @@ export default function App() {
     }
     if (teamData?.coachName) state.setCoachName(teamData.coachName);
     if (teamData?.players?.length) state.setPlayers(teamData.players);
-    // Reset keeper + tegenstander + posities bij team switch (worden opnieuw ingevuld in SetupView)
+    // Reset keeper + tegenstander + posities + logo's bij team switch (worden opnieuw ingevuld in SetupView)
     state.setKeeper(null);
     state.setAwayTeam('');
+    state.setHomeLogo(null);
+    state.setAwayLogo(null);
     state.setPlayerPositions({});
     // Team-specifieke wedstrijdinstellingen toepassen
     if (teamData?.settings) {

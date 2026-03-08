@@ -16,6 +16,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     playersOnField, setPlayersOnField, halfDuration, setHalfDuration,
     halves, setHalves, subInterval, setSubInterval,
     homeTeam, setHomeTeam, awayTeam, setAwayTeam,
+    setHomeLogo, setAwayLogo,
     team, setTeam, isOnline,
     totalMatchTime, showPaste, setShowPaste,
     clipboardNames, setClipboardNames, showClipBanner, setShowClipBanner,
@@ -77,6 +78,11 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           // Verwijder "JM" suffix en club prefix voor mooiere naam
           const cleanName = opponent?.replace(/JM$/, '').trim();
           setAwayTeam(cleanName || opponent);
+        }
+        // Logo's opslaan in state zodat ze in de wedstrijd scoreboard verschijnen
+        if (upcoming) {
+          setHomeLogo(upcoming.thuisLogo || null);
+          setAwayLogo(upcoming.uitLogo || null);
         }
       })
       .catch(() => setSchedule({ loading: false, match: null, error: 'Kon programma niet laden' }));
