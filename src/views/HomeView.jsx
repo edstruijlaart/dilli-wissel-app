@@ -413,14 +413,23 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 {loggedInTeam && (
                   <button
                     onClick={() => {
+                      setCoachError('');
+                      setChecking(true);
                       onJoinAsCoach(selectedMatch.code).then(success => {
                         if (!success) {
-                          setCoachError('Kon niet mee-coachen');
+                          setCoachError('Kon niet mee-coachen. Probeer opnieuw.');
+                        } else {
+                          setShowCoachCode(false);
+                          setSelectedMatch(null);
                         }
-                        setShowCoachCode(false);
-                        setSelectedMatch(null);
+                        setChecking(false);
+                      }).catch(err => {
+                        console.error('Mee-coachen error:', err);
+                        setCoachError('Er ging iets mis. Probeer opnieuw.');
+                        setChecking(false);
                       });
                     }}
+                    disabled={checking}
                     style={{
                       ...btnS,
                       width: "100%",
@@ -433,11 +442,15 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 8,
-                      marginBottom: 8
+                      marginBottom: 8,
+                      opacity: checking ? 0.7 : 1,
                     }}
                   >
-                    📋 Mee-coachen
+                    {checking ? '⏳ Verbinden...' : '📋 Mee-coachen'}
                   </button>
+                )}
+                {coachError && selectedMatch && (
+                  <p style={{ fontSize: 12, color: T.danger, fontWeight: 600, margin: '0 0 8px 0', textAlign: 'center' }}>{coachError}</p>
                 )}
                 {/* Coach login (voor niet-ingelogde coaches) */}
                 <button

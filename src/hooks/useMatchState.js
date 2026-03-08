@@ -833,7 +833,10 @@ export function useMatchState() {
   const reconnectToMatch = useCallback(async (code) => {
     try {
       const res = await fetch(`/api/match/${code}`);
-      if (!res.ok) return false;
+      if (!res.ok) {
+        console.error('Reconnect failed:', res.status, res.statusText, 'for code:', code);
+        return false;
+      }
       const data = await res.json();
 
       // Setup state (niet in applyServerSnapshot)
@@ -848,6 +851,12 @@ export function useMatchState() {
       setHalfDuration(data.halfDuration || 20);
       setHalves(data.halves || 2);
       setSubInterval(data.subInterval || 5);
+
+      // CoachName: gebruik localStorage naam van joining coach, fallback naar server data
+      try {
+        const saved = JSON.parse(localStorage.getItem('dilli_coach') || '{}');
+        setCoachName(saved.coachName || data.coachName || '');
+      } catch { setCoachName(data.coachName || ''); }
 
       // Tactiek modus state (setup level)
       setMatchMode(data.matchMode || "speeltijd");
