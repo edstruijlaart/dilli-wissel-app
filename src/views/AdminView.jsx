@@ -449,8 +449,10 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
   const [subInterval, setSubInterval] = useState(initialSettings.subInterval || '');
 
   // Eerlijke wissels toggle + formatie velden
+  // Senioren (11+ spelers) default: autoSubs uit
   const [autoSubs, setAutoSubs] = useState(
     initialSettings.autoSubs != null ? initialSettings.autoSubs :
+    (initialSettings.playersOnField || 0) >= 11 ? false :
     initialSettings.mode === 'tactiek' ? false : true
   );
   const [defaultFormation, setDefaultFormation] = useState(initialSettings.defaultFormation || '');
