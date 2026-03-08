@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { playWhistle, notifySub, notifyHalf, notifyEnd, notifyGoal } from '../utils/audio';
 import { fmt } from '../utils/format';
+import { assignPlayersToFormation } from '../data/formations';
 
 export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
 
@@ -43,6 +44,12 @@ export function useMatchState() {
   const [events, setEvents] = useState([]);
   const [pendingEnd, setPendingEnd] = useState(false); // Wedstrijd wil eindigen, wacht op coach bevestiging
 
+  // Tactiek modus state (JO13+ / 11v11)
+  const [matchMode, setMatchMode] = useState("speeltijd"); // "speeltijd" | "tactiek"
+  const [formation, setFormation] = useState(null); // "4-3-3" | "custom" | null
+  const [playerPositions, setPlayerPositions] = useState({}); // { "Bobby": { x: 50, y: 85 } }
+  const [squadNumbers, setSquadNumbers] = useState({}); // { "Bobby": 1 }
+
   // Multiplayer state
   const [matchCode, setMatchCode] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -84,9 +91,10 @@ export function useMatchState() {
     subHistory,
     injuryTime,
     isRunning, isPaused, halfBreak,
+    matchMode, formation, playerPositions, squadNumbers,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
-  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime]);
+  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, formation, playerPositions, squadNumbers]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -174,6 +182,12 @@ export function useMatchState() {
       setSubTimer(data.subElapsedAtPause || 0);
     }
 
+    // Tactiek modus state
+    setMatchMode(data.matchMode || "speeltijd");
+    setFormation(data.formation || null);
+    setPlayerPositions(data.playerPositions || {});
+    setSquadNumbers(data.squadNumbers || {});
+
     // Sub alert sluiten (andere coach heeft gewisseld of overgeslagen)
     if (showSubAlert) {
       setShowSubAlert(false);
@@ -187,7 +201,7 @@ export function useMatchState() {
   // Sync bij elke relevante state wijziging (anti-echo: skip als we server state adopteren)
   useEffect(() => {
     if (isOnline && matchCode && view !== VIEWS.SETUP && !isAdoptingRef.current) syncToServer();
-  }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view, matchCode]);
+  }, [onField, onBench, homeScore, awayScore, isRunning, isPaused, halfBreak, currentHalf, matchKeeper, playTime, view, matchCode, formation, playerPositions]);
 
   // --- Online wedstrijd aanmaken ---
   const createOnlineMatch = useCallback(async () => {
@@ -251,6 +265,10 @@ export function useMatchState() {
     alertShownRef.current = false; setManualSubMode(null);
     setHomeScore(0); setAwayScore(0); setGoalScorers({});
     setEvents([]); // Reset events van vorige wedstrijd
+    // Tactiek: wijs spelers toe aan opstellingsposities
+    if (matchMode === "tactiek" && formation && formation !== "custom") {
+      setPlayerPositions(assignPlayersToFormation(formation, fl, keeper));
+    }
     setView(VIEWS.MATCH);
   };
 
@@ -361,7 +379,7 @@ export function useMatchState() {
       }
       return;
     }
-    if (subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
+    if (matchMode !== "tactiek" && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
       alertShownRef.current = true;
       setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper));
       setShowSubAlert(true);
@@ -406,6 +424,14 @@ export function useMatchState() {
     setOnField(onField.map(p => (p === fp ? bp : p)));
     setOnBench(onBench.map(p => (p === bp ? fp : p)));
     if (wasKeeper) setMatchKeeper(bp);
+    // Tactiek: inkomende speler erft positie van uitgaande
+    if (matchMode === "tactiek") {
+      setPlayerPositions(prev => {
+        const n = { ...prev };
+        if (n[fp]) { n[bp] = { ...n[fp] }; delete n[fp]; }
+        return n;
+      });
+    }
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [fp], inn: [bp], manual: true, keeperSwap: wasKeeper }]);
     addEvent({ type: 'sub_manual', time: fmt(matchTimer), half: currentHalf, out: [fp], inn: [bp] });
   };
@@ -423,6 +449,11 @@ export function useMatchState() {
     setMatchKeeper(newKeeper);
     setShowKeeperPicker(false);
     addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
+  };
+
+  const updatePlayerPosition = (name, pos) => {
+    setPlayerPositions(prev => ({ ...prev, [name]: pos }));
+    if (formation !== "custom") setFormation("custom");
   };
 
   const updateScore = (side, delta, scorer) => {
@@ -474,6 +505,11 @@ export function useMatchState() {
       setHalfDuration(data.halfDuration || 20);
       setHalves(data.halves || 2);
       setSubInterval(data.subInterval || 5);
+
+      // Tactiek modus state (setup level)
+      setMatchMode(data.matchMode || "speeltijd");
+      setFormation(data.formation || null);
+      setSquadNumbers(data.squadNumbers || {});
 
       // Live match state + timer via gedeelde functie
       applyServerSnapshot(data);
@@ -539,6 +575,10 @@ export function useMatchState() {
     showPaste, setShowPaste, clipboardNames, setClipboardNames,
     showClipBanner, setShowClipBanner, clipDismissed, setClipDismissed,
     pasteText, setPasteText, pasteResult, setPasteResult,
+    // Tactiek modus
+    matchMode, setMatchMode, formation, setFormation,
+    playerPositions, setPlayerPositions, updatePlayerPosition,
+    squadNumbers, setSquadNumbers,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
     coachName, setCoachName, viewers, events, pendingEnd,

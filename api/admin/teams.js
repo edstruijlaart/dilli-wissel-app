@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   // POST: team toevoegen of bijwerken
   if (req.method === 'POST') {
     try {
-      const { code, team, players, settings } = req.body || {};
+      const { code, team, players, settings, squadNumbers } = req.body || {};
       if (!code || !code.trim()) return res.status(400).json({ error: 'Code is verplicht' });
       if (!team || !team.trim()) return res.status(400).json({ error: 'Teamnaam is verplicht' });
 
@@ -77,9 +77,16 @@ export default async function handler(req, res) {
           ...(settings.halfDuration != null && { halfDuration: Number(settings.halfDuration) }),
           ...(settings.halves != null && { halves: Number(settings.halves) }),
           ...(settings.subInterval != null && { subInterval: Number(settings.subInterval) }),
+          ...(settings.mode && { mode: settings.mode }),
+          ...(settings.defaultFormation && { defaultFormation: settings.defaultFormation }),
         };
         // Verwijder lege settings
         if (Object.keys(teamData.settings).length === 0) delete teamData.settings;
+      }
+
+      // Rugnummers opslaan als meegegeven
+      if (squadNumbers && typeof squadNumbers === 'object' && Object.keys(squadNumbers).length > 0) {
+        teamData.squadNumbers = squadNumbers;
       }
 
       teams[upperCode] = teamData;

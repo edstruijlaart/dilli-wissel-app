@@ -8,6 +8,7 @@ import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Icons from '../components/Icons';
 import AudioTimeline from '../components/AudioTimeline';
+import FieldView from '../components/FieldView';
 
 
 export default function ViewerView({ code, onBack }) {
@@ -138,7 +139,7 @@ export default function ViewerView({ code, onBack }) {
             Helft {match.currentHalf} van {match.halves}
           </div>
           <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(elapsed)}</div>
-          {match.isRunning && !match.isPaused && !match.halfBreak && (
+          {match.matchMode !== "tactiek" && match.isRunning && !match.isPaused && !match.halfBreak && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Wissel over {fmt(Math.max(0, match.subInterval * 60 - subElapsed))}</div>
           )}
         </div>
@@ -169,19 +170,39 @@ export default function ViewerView({ code, onBack }) {
 
         {/* Veld */}
         {match.onField && match.onField.length > 0 && (
-          <div style={{ ...card, padding: 16, marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>In het veld</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {match.onField.map(p => (
-                <div key={p} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, background: p === match.matchKeeper ? "rgba(217,119,6,0.06)" : T.glass }}>
-                  {p === match.matchKeeper && Icons.glove(14, T.keeper)}
-                  <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{p}</span>
-                  {p === match.matchKeeper && <Badge variant="keeper">Keeper</Badge>}
-                  <Badge variant="field">Veld</Badge>
-                </div>
-              ))}
+          match.matchMode === "tactiek" && match.playerPositions ? (
+            <div style={{ ...card, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Opstelling ({match.onField.length})</span>
+                {match.formation && match.formation !== "custom" && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.accent, marginLeft: "auto" }}>{match.formation}</span>
+                )}
+              </div>
+              <FieldView
+                onField={match.onField}
+                playerPositions={match.playerPositions}
+                squadNumbers={match.squadNumbers || {}}
+                matchKeeper={match.matchKeeper}
+                interactive={false}
+                goalScorers={match.goalScorers || {}}
+              />
             </div>
-          </div>
+          ) : (
+            <div style={{ ...card, padding: 16, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>In het veld</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {match.onField.map(p => (
+                  <div key={p} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 10, background: p === match.matchKeeper ? "rgba(217,119,6,0.06)" : T.glass }}>
+                    {p === match.matchKeeper && Icons.glove(14, T.keeper)}
+                    <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{p}</span>
+                    {p === match.matchKeeper && <Badge variant="keeper">Keeper</Badge>}
+                    <Badge variant="field">Veld</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
         )}
 
         {/* Bank */}

@@ -6,6 +6,9 @@ import { vibrate } from '../utils/audio';
 import Icons from '../components/Icons';
 import Badge from '../components/Badge';
 import DilliLogo from '../components/DilliLogo';
+import FieldView from '../components/FieldView';
+import FormationPicker from '../components/FormationPicker';
+import { assignPlayersToFormation } from '../data/formations';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
 import PhotoCapture from '../components/PhotoCapture';
@@ -22,7 +25,10 @@ export default function MatchView({ state }) {
     executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
     viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
+    matchMode, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
   } = state;
+
+  const isTactiek = matchMode === "tactiek";
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
@@ -149,7 +155,7 @@ export default function MatchView({ state }) {
         )}
         {/* Timer */}
         <div style={{ ...card, padding: 20, marginBottom: 10, position: "relative", overflow: "hidden" }}>
-          {urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
+          {!isTactiek && urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Helft</div>
@@ -169,10 +175,10 @@ export default function MatchView({ state }) {
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
             <span style={{ color: T.textMuted }}>Rest: {fmt(Math.max(0, hr))}</span>
-            {onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
+            {!isTactiek && onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
           {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
-          {isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
+          {!isTactiek && isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
             const { out: nextOut, inn: nextIn } = calculateSubs(onField, onBench, playTime, matchKeeper);
             if (nextOut.length === 0) return null;
             return (
@@ -301,8 +307,8 @@ export default function MatchView({ state }) {
           </div>
         )}
 
-        {/* Sub alert - full screen overlay */}
-        {showSubAlert && !halfBreak && (
+        {/* Sub alert - full screen overlay (alleen in speeltijd modus) */}
+        {!isTactiek && showSubAlert && !halfBreak && (
           <div style={{
             position: "fixed", inset: 0, zIndex: 1100,
             background: subAlertUrgent ? "rgba(220,38,38,0.15)" : "rgba(217,119,6,0.08)",
@@ -345,34 +351,75 @@ export default function MatchView({ state }) {
         )}
 
         {/* Field */}
-        <div style={{ ...card, padding: 16, marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>In het veld ({onField.length})</span>
+        {isTactiek ? (
+          <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>Opstelling ({onField.length})</span>
+            </div>
+            <FormationPicker
+              value={formation}
+              onChange={(key) => {
+                setFormation(key);
+                if (key !== "custom") {
+                  const newPositions = assignPlayersToFormation(key, onField, matchKeeper);
+                  Object.entries(newPositions).forEach(([name, pos]) => updatePlayerPosition(name, pos));
+                }
+              }}
+            />
+            <div style={{ marginTop: 10 }}>
+              <FieldView
+                onField={onField}
+                playerPositions={playerPositions}
+                squadNumbers={squadNumbers}
+                matchKeeper={matchKeeper}
+                interactive={true}
+                onPositionChange={updatePlayerPosition}
+                onPlayerTap={(name) => {
+                  if (onBench.length > 0 && !halfBreak) {
+                    setManualSubMode(manualSubMode === name ? null : name);
+                  }
+                }}
+                selectedPlayer={manualSubMode}
+                goalScorers={goalScorers}
+              />
+            </div>
+            {manualSubMode && (
+              <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: T.danger, fontWeight: 600 }}>
+                {manualSubMode} geselecteerd — tik op bankspeler als vervanger
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {[...onField.filter(p => p === matchKeeper), ...[...onField.filter(p => p !== matchKeeper)].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0))].map(p => {
-              const isK = p === matchKeeper; const isSel = manualSubMode === p;
-              return (
-                <div key={p} onClick={() => { if (onBench.length > 0 && !showSubAlert && !halfBreak) setManualSubMode(manualSubMode === p ? null : p); }}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 10, cursor: "pointer", transition: "all 0.15s",
-                    background: isSel ? "rgba(220,38,38,0.06)" : isK ? "rgba(217,119,6,0.04)" : "rgba(22,163,74,0.03)",
-                    border: isSel ? `1px solid ${T.dangerDim}` : `1px solid ${T.glassBorder}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {isK && Icons.glove(14, T.keeper)}
-                    <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
-                    {isK && <Badge variant="keeper">Keeper</Badge>}
-                    {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
+        ) : (
+          <div style={{ ...card, padding: 16, marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>In het veld ({onField.length})</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {[...onField.filter(p => p === matchKeeper), ...[...onField.filter(p => p !== matchKeeper)].sort((a, b) => (playTime[b] || 0) - (playTime[a] || 0))].map(p => {
+                const isK = p === matchKeeper; const isSel = manualSubMode === p;
+                return (
+                  <div key={p} onClick={() => { if (onBench.length > 0 && !showSubAlert && !halfBreak) setManualSubMode(manualSubMode === p ? null : p); }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 10, cursor: "pointer", transition: "all 0.15s",
+                      background: isSel ? "rgba(220,38,38,0.06)" : isK ? "rgba(217,119,6,0.04)" : "rgba(22,163,74,0.03)",
+                      border: isSel ? `1px solid ${T.dangerDim}` : `1px solid ${T.glassBorder}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {isK && Icons.glove(14, T.keeper)}
+                      <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
+                      {isK && <Badge variant="keeper">Keeper</Badge>}
+                      {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
+                      {isSel && <span style={{ fontSize: 11, color: T.danger, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>{Icons.arrowDown(12)} kies vervanger</span>}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
-                    {isSel && <span style={{ fontSize: 11, color: T.danger, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>{Icons.arrowDown(12)} kies vervanger</span>}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Bench */}
         {onBench.length > 0 && (

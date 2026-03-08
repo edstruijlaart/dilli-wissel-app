@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.9.x
+**Status**: Actief productie — v3.15.0
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -34,7 +34,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.9.x
+├── package.json                  # v3.14.0
 ├── vite.config.js                # Vite + React + PWA config
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
@@ -53,9 +53,14 @@ dilli-wissel-app/
 │   │   ├── teams.js             # Admin: teams beheren
 │   │   ├── matches.js           # Admin: wedstrijden overzicht
 │   │   └── delete-match.js      # Admin: wedstrijd verwijderen
+│   ├── secretariaat/
+│   │   └── verify.js            # Secretariaat authenticatie verificatie
+│   ├── kleedkamers.js           # GET/PUT: kleedkamer toewijzingen (Vercel KV)
+│   ├── schedule.js              # GET: VoetbalAssist proxy (wedstrijdprogramma, cache 5 min)
 │   └── match/
 │       ├── create.js            # POST: wedstrijd aanmaken, 4-letter code genereren
 │       ├── live.js              # GET: live wedstrijden overzicht (voor HomeView)
+│       ├── save.js              # POST: wedstrijd opslaan in historie (permanent KV, max 100/team)
 │       ├── [code].js            # GET/PUT: match state (Vercel KV)
 │       ├── events/
 │       │   └── [code].js        # GET/POST: event log (goals, wissels, foto's, audio_start)
@@ -67,8 +72,11 @@ dilli-wissel-app/
 └── src/
     ├── main.jsx                  # React root mount
     ├── version.js                # VERSION constante — update bij elke release!
-    ├── App.jsx                   # Hoofd router: HomeView | MatchView | SummaryView | ViewerView | AdminView
+    ├── App.jsx                   # Hoofd router: HomeView | SetupView | MatchView | SummaryView | ViewerView | AdminView | SecretariaatView
     ├── theme.js                  # Design tokens: kleuren, card, btnP, btnS, btnD, mono
+    │
+    ├── data/
+    │   └── formations.js           # 8 standaard formaties (4-3-3 t/m 4-5-1) + assignPlayersToFormation() + FORMATION_KEYS
     │
     ├── utils/
     │   ├── format.js             # fmt(seconds) → "mm:ss", parseNames()
@@ -82,6 +90,11 @@ dilli-wissel-app/
     │                             # Returnt: match, events, getElapsed(), getSubElapsed()
     │
     ├── components/
+    │   ├── FieldView.jsx         # SVG voetbalveld: speler markers, drag & drop, rugnummers, keeper/goal iconen
+    │   │                         # Props: onField, playerPositions, squadNumbers, matchKeeper, interactive,
+    │   │                         #   onPositionChange (drag), onPlayerTap (wissel), goalScorers
+    │   ├── FormationPicker.jsx   # Horizontale formatie-selector (8 standaard + "Vrij")
+    │   │                         # Props: value, onChange
     │   ├── Icons.jsx             # SVG iconen: football, timer, swap, play, pause, check,
     │   │                         # x, eye, microphone, camera, image, glove, whistle, etc.
     │   ├── DilliLogo.jsx         # v.v. Dilettant club logo SVG component
@@ -126,8 +139,9 @@ dilli-wissel-app/
         │                         #   Veld (read-only)
         │                         #   Bank (read-only)
         │                         #   Gebeurtenissen (goals + wissels, geen foto's)
-        ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis
-        └── AdminView.jsx         # Admin panel: wedstrijden beheren
+        ├── SummaryView.jsx       # Na afloop: speeltijd statistieken, wisselgeschiedenis, wedstrijd opslaan
+        ├── AdminView.jsx         # Admin panel: wedstrijden + teams beheren
+        └── SecretariaatView.jsx  # Secretariaat: programma (VoetbalAssist), live wedstrijden, kleedkamers
 ```
 
 ---
@@ -148,9 +162,18 @@ dilli-wissel-app/
 - **Updates beheren**: alle audio/foto updates zien, verwijderen (× knop)
 - **Confetti + geluid + vibratie**: bij doelpunten
 - **Wake lock**: scherm blijft aan tijdens wedstrijd
+- **Tactiek modus** (v3.15.0): voor JO13+ / 11v11 teams
+  - Twee team-modi: `"speeltijd"` (default, gelijke speeltijd) vs `"tactiek"` (formaties, geen auto-wissels)
+  - SVG voetbalveld (FieldView) met drag & drop speler positionering
+  - 8 standaard formaties (4-3-3, 4-4-2, etc.) + "Vrij" (custom posities)
+  - Rugnummers (squadNumbers) per speler, configureerbaar in Admin
+  - Formatie wisselen tijdens wedstrijd, positie-overdracht bij wissel
+  - Keeper apart gemarkeerd, doelpuntenmakers met ⚽ indicator
+  - Admin: mode toggle, formatie dropdown, rugnummer inputs per team
 
 ### Kijker
 - **Live volgen**: score, timer, veld/bank bezetting via polling (5s interval)
+- **Tactiek view**: FieldView (read-only) met formatie, rugnummers en posities (als coach tactiek modus gebruikt)
 - **Laatste update**: meest recente audio of foto bovenaan
 - **Doelpunt notificatie**: confetti + toast bij goals
 - **Foto's bekijken**: fullscreen tap in Updates feed
@@ -202,6 +225,7 @@ Coach → PhotoCapture → POST /api/match/photo/upload
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob (audio) |
 | `BLOB2_READ_WRITE_TOKEN` | Vercel Blob (foto's, apart store) |
 | `ADMIN_PASSWORD` | Admin panel toegang |
+| `SECRETARIAAT_PASSWORD` | Secretariaat panel toegang |
 
 ---
 

@@ -111,7 +111,12 @@ export default function App() {
       if (s.halfDuration) state.setHalfDuration(s.halfDuration);
       if (s.halves) state.setHalves(s.halves);
       if (s.subInterval) state.setSubInterval(s.subInterval);
+      // Tactiek modus
+      if (s.mode) state.setMatchMode(s.mode);
+      if (s.defaultFormation) state.setFormation(s.defaultFormation);
     }
+    // Rugnummers
+    if (teamData?.squadNumbers) state.setSquadNumbers(teamData.squadNumbers);
     setMode(MODES.SETUP);
   };
 

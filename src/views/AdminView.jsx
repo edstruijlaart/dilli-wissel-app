@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { T, base, card, mono, btnP, btnS, btnD } from '../theme';
 import DilliLogo from '../components/DilliLogo';
 import Icons from '../components/Icons';
+import { FORMATION_KEYS } from '../data/formations';
 
 const ADMIN_KEY = 'dilli_admin';
 
@@ -275,13 +276,13 @@ function TeamsManager({ teams, setTeams, headers }) {
     setTimeout(() => setFeedback(''), 2500);
   };
 
-  const saveTeam = async (code, team, players, settings) => {
+  const saveTeam = async (code, team, players, settings, squadNumbers) => {
     setSaving(true);
     try {
       const res = await fetch('/api/admin/teams', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ code, team, players, settings }),
+        body: JSON.stringify({ code, team, players, settings, squadNumbers }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -351,6 +352,7 @@ function TeamsManager({ teams, setTeams, headers }) {
           existingCodes={Object.keys(teams)}
           existingTeams={teams}
           initialSettings={{}}
+          initialSquadNumbers={{}}
         />
       )}
 
@@ -370,6 +372,7 @@ function TeamsManager({ teams, setTeams, headers }) {
               initialTeam={config.team}
               initialPlayers={config.players}
               initialSettings={config.settings || {}}
+              initialSquadNumbers={config.squadNumbers || {}}
               onSave={saveTeam}
               onCancel={() => setEditingCode(null)}
               saving={saving}
@@ -388,9 +391,11 @@ function TeamsManager({ teams, setTeams, headers }) {
 
               {config.settings && Object.keys(config.settings).length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {config.settings.mode === "tactiek" && <span style={{ fontSize: 11, color: "#fff", background: T.accent, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}>Tactiek</span>}
+                  {config.settings.defaultFormation && <span style={{ fontSize: 11, color: T.accent, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6, fontWeight: 600 }}>{config.settings.defaultFormation}</span>}
                   {config.settings.playersOnField && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.playersOnField} in veld</span>}
                   {config.settings.halves && config.settings.halfDuration && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.halves}×{config.settings.halfDuration}min</span>}
-                  {config.settings.subInterval && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>wissel {config.settings.subInterval}min</span>}
+                  {config.settings.mode !== "tactiek" && config.settings.subInterval && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>wissel {config.settings.subInterval}min</span>}
                 </div>
               )}
 
@@ -431,7 +436,7 @@ function TeamsManager({ teams, setTeams, headers }) {
 
 /* ─── Team Form Component ─── */
 
-function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], initialSettings = {}, onSave, onCancel, saving, isEdit, existingCodes = [], existingTeams = {} }) {
+function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], initialSettings = {}, initialSquadNumbers = {}, onSave, onCancel, saving, isEdit, existingCodes = [], existingTeams = {} }) {
   const [code, setCode] = useState(initialCode);
   const [team, setTeam] = useState(initialTeam);
   const [playerText, setPlayerText] = useState(initialPlayers.join(', '));
@@ -442,6 +447,16 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
   const [halfDuration, setHalfDuration] = useState(initialSettings.halfDuration || '');
   const [halves, setHalves] = useState(initialSettings.halves || '');
   const [subInterval, setSubInterval] = useState(initialSettings.subInterval || '');
+
+  // Tactiek modus velden
+  const [matchMode, setMatchMode] = useState(initialSettings.mode || 'speeltijd');
+  const [defaultFormation, setDefaultFormation] = useState(initialSettings.defaultFormation || '');
+  const [squadNumbers, setSquadNumbers] = useState(initialSquadNumbers);
+
+  const isTactiek = matchMode === 'tactiek';
+
+  // Parsed players (voor rugnummer inputs)
+  const parsedPlayers = playerText.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
 
   const handleSave = () => {
     if (!code.trim()) return setError('Code is verplicht');
@@ -460,19 +475,33 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
       return setError(`Teamnaam "${team.trim()}" bestaat al (code: ${duplicate[0]})`);
     }
     setError('');
-    const players = playerText
-      .split(/[,\n]/)
-      .map(p => p.trim())
-      .filter(Boolean);
+    const players = parsedPlayers;
 
     // Settings: alleen meesturen als ingevuld
     const settings = {};
-    if (playersOnField !== '' && !isNaN(playersOnField)) settings.playersOnField = Number(playersOnField);
+    const pof = isTactiek ? 11 : playersOnField;
+    if (pof !== '' && !isNaN(pof)) settings.playersOnField = Number(pof);
     if (halfDuration !== '' && !isNaN(halfDuration)) settings.halfDuration = Number(halfDuration);
     if (halves !== '' && !isNaN(halves)) settings.halves = Number(halves);
-    if (subInterval !== '' && !isNaN(subInterval)) settings.subInterval = Number(subInterval);
+    if (!isTactiek && subInterval !== '' && !isNaN(subInterval)) settings.subInterval = Number(subInterval);
+    // Tactiek-specifieke settings
+    if (isTactiek) {
+      settings.mode = 'tactiek';
+      if (defaultFormation) settings.defaultFormation = defaultFormation;
+    }
 
-    onSave(code.trim().toUpperCase(), team.trim(), players, Object.keys(settings).length > 0 ? settings : undefined);
+    // Rugnummers: alleen niet-lege opslaan
+    const sqNums = isTactiek ? Object.fromEntries(
+      Object.entries(squadNumbers).filter(([, v]) => v !== '' && v != null)
+    ) : undefined;
+
+    onSave(
+      code.trim().toUpperCase(),
+      team.trim(),
+      players,
+      Object.keys(settings).length > 0 ? settings : undefined,
+      sqNums && Object.keys(sqNums).length > 0 ? sqNums : undefined,
+    );
   };
 
   const inputStyle = {
@@ -550,16 +579,97 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
         )}
       </div>
 
+      {/* Modus toggle */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, display: "block" }}>
+          Modus
+        </label>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[['speeltijd', 'Speeltijd'], ['tactiek', 'Tactiek']].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setMatchMode(key)}
+              style={{
+                padding: "8px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                fontFamily: "'DM Sans',sans-serif", cursor: "pointer", transition: "all 0.15s",
+                border: matchMode === key ? `2px solid ${T.accent}` : `1px solid ${T.glassBorder}`,
+                background: matchMode === key ? `${T.accent}12` : T.glass,
+                color: matchMode === key ? T.accent : T.textDim,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
+          {isTactiek ? 'Tactiek: opstellingen, posities, rugnummers. Geen auto-wissels.' : 'Speeltijd: eerlijke verdeling, automatische wisselsuggesties.'}
+        </p>
+      </div>
+
+      {/* Default formatie (alleen bij tactiek) */}
+      {isTactiek && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block" }}>
+            Standaard formatie
+          </label>
+          <select
+            value={defaultFormation}
+            onChange={e => setDefaultFormation(e.target.value)}
+            style={{
+              ...inputStyle, marginTop: 4, appearance: "auto",
+              color: defaultFormation ? T.text : T.textMuted,
+            }}
+          >
+            <option value="">Geen (kies bij wedstrijdstart)</option>
+            {FORMATION_KEYS.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Rugnummers (alleen bij tactiek en als er spelers zijn) */}
+      {isTactiek && parsedPlayers.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>
+            Rugnummers <span style={{ fontWeight: 400, textTransform: "none" }}>(optioneel)</span>
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {parsedPlayers.map(p => (
+              <div key={p} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <input
+                  type="number"
+                  value={squadNumbers[p] || ''}
+                  onChange={e => setSquadNumbers(prev => ({ ...prev, [p]: e.target.value ? Number(e.target.value) : '' }))}
+                  placeholder="#"
+                  min={1}
+                  max={99}
+                  style={{ ...numInputStyle, width: 48 }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Wedstrijdinstellingen */}
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>
           Standaard instellingen <span style={{ fontWeight: 400, textTransform: "none" }}>(optioneel)</span>
         </label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
-            <input type="number" value={playersOnField} onChange={e => setPlayersOnField(e.target.value)} placeholder="—" min={3} style={numInputStyle} />
-          </div>
+          {!isTactiek && (
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
+              <input type="number" value={playersOnField} onChange={e => setPlayersOnField(e.target.value)} placeholder="—" min={3} style={numInputStyle} />
+            </div>
+          )}
+          {isTactiek && (
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
+              <input type="number" value={11} disabled style={{ ...numInputStyle, background: "#f0f0f0", color: T.textMuted }} />
+            </div>
+          )}
           <div>
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Helften</div>
             <input type="number" value={halves} onChange={e => setHalves(e.target.value)} placeholder="—" min={1} style={numInputStyle} />
@@ -568,12 +678,18 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Min / helft</div>
             <input type="number" value={halfDuration} onChange={e => setHalfDuration(e.target.value)} placeholder="—" min={5} style={numInputStyle} />
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Wissel elke (min)</div>
-            <input type="number" value={subInterval} onChange={e => setSubInterval(e.target.value)} placeholder="—" min={2} style={numInputStyle} />
-          </div>
+          {!isTactiek && (
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Wissel elke (min)</div>
+              <input type="number" value={subInterval} onChange={e => setSubInterval(e.target.value)} placeholder="—" min={2} style={numInputStyle} />
+            </div>
+          )}
         </div>
-        <p style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Leeg = app standaard. Ingevuld = automatisch vooringesteld bij wedstrijdstart.</p>
+        <p style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>
+          {isTactiek
+            ? 'In veld staat vast op 11 in tactiek modus. Leeg = app standaard.'
+            : 'Leeg = app standaard. Ingevuld = automatisch vooringesteld bij wedstrijdstart.'}
+        </p>
       </div>
 
       {error && <p style={{ fontSize: 12, color: T.danger, marginBottom: 8 }}>{error}</p>}

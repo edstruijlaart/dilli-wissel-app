@@ -6,6 +6,9 @@ import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 import Stepper from '../components/Stepper';
+import FormationPicker from '../components/FormationPicker';
+import FieldView from '../components/FieldView';
+import { assignPlayersToFormation } from '../data/formations';
 
 export default function SetupView({ state, onStartMatch, onBack }) {
   const {
@@ -19,7 +22,41 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     clipDismissed, setClipDismissed, pasteText, setPasteText,
     pasteResult, setPasteResult,
     addPlayer, removePlayer, movePlayer, toggleKeeper,
+    matchMode, formation, setFormation, playerPositions, setPlayerPositions,
+    updatePlayerPosition, squadNumbers,
   } = state;
+
+  const isTactiek = matchMode === "tactiek";
+
+  // Bereken veldspelers voor FieldView preview
+  const fieldPlayers = (() => {
+    if (!isTactiek || players.length === 0) return [];
+    const kp = keeper;
+    const others = players.filter(p => p !== kp);
+    const onField = kp ? [kp, ...others.slice(0, playersOnField - 1)] : others.slice(0, playersOnField);
+    return onField;
+  })();
+
+  // Herbereken posities wanneer formatie of spelers wijzigen in tactiek modus
+  const handleFormationChange = (key) => {
+    setFormation(key);
+    if (key !== "custom" && fieldPlayers.length > 0) {
+      const positions = assignPlayersToFormation(key, fieldPlayers, keeper);
+      setPlayerPositions(positions);
+    }
+  };
+
+  // Initialiseer posities als er nog geen zijn maar wel een formatie
+  useEffect(() => {
+    if (!isTactiek || !formation || formation === "custom") return;
+    if (fieldPlayers.length === 0) return;
+    // Alleen herberekenen als er spelers zijn zonder positie
+    const hasPositions = fieldPlayers.some(p => playerPositions[p]);
+    if (!hasPositions) {
+      const positions = assignPlayersToFormation(formation, fieldPlayers, keeper);
+      setPlayerPositions(positions);
+    }
+  }, [isTactiek, formation, players.length, keeper]);
 
   // Schedule: volgende wedstrijd ophalen
   const [schedule, setSchedule] = useState({ loading: false, match: null, error: null });
@@ -147,10 +184,10 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           })()}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <Stepper label="In veld" value={playersOnField} set={setPlayersOnField} min={3} step={1} />
+            <Stepper label="In veld" value={playersOnField} set={isTactiek ? undefined : setPlayersOnField} min={3} step={1} />
             <Stepper label="Helften" value={halves} set={setHalves} min={1} step={1} />
             <Stepper label="Min / helft" value={halfDuration} set={setHalfDuration} min={5} step={5} />
-            <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />
+            {!isTactiek && <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />}
           </div>
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Tegenstander</div>
@@ -235,6 +272,29 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           </div>
           {players.length > 0 && <button onClick={() => { setPlayers([]); setKeeper(null); }} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 12, cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans',sans-serif" }}>Alles wissen</button>}
         </div>
+
+        {/* Opstelling preview in tactiek modus */}
+        {isTactiek && fieldPlayers.length > 0 && (
+          <div style={{ ...card, padding: 20, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.textDim, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Opstelling</div>
+            <FormationPicker value={formation} onChange={handleFormationChange} />
+            <div style={{ marginTop: 12 }}>
+              <FieldView
+                onField={fieldPlayers}
+                playerPositions={playerPositions}
+                squadNumbers={squadNumbers}
+                matchKeeper={keeper}
+                interactive={true}
+                onPositionChange={updatePlayerPosition}
+              />
+            </div>
+            {formation && (
+              <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: T.textMuted }}>
+                {formation === "custom" ? "Vrije opstelling — sleep spelers" : `Formatie ${formation} — sleep om aan te passen`}
+              </div>
+            )}
+          </div>
+        )}
 
         <button onClick={onStartMatch} disabled={!canStart} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, opacity: canStart ? 1 : 0.3, cursor: canStart ? "pointer" : "not-allowed", boxShadow: canStart ? "0 4px 16px rgba(22,163,74,0.25)" : "none" }}>
           {!canStart ? (players.length > playersOnField && !keeper ? "Wijs eerst een keeper aan" : `Nog ${Math.max(1, playersOnField - players.length + 1)} speler${playersOnField - players.length + 1 !== 1 ? "s" : ""} nodig`) : "Start wedstrijd →"}

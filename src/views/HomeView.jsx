@@ -87,6 +87,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 data.players = fresh.players;
                 data.team = fresh.team || data.team;
                 if (fresh.settings) data.settings = fresh.settings;
+                if (fresh.squadNumbers) data.squadNumbers = fresh.squadNumbers;
                 localStorage.setItem('dilli_coach', JSON.stringify(data));
               }
             }
@@ -115,7 +116,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
       });
       const data = await res.json();
       if (data.valid) {
-        const teamData = { team: data.team || null, players: data.players || [], code: coachCode.trim(), settings: data.settings || null };
+        const teamData = { team: data.team || null, players: data.players || [], code: coachCode.trim(), settings: data.settings || null, squadNumbers: data.squadNumbers || null };
         setVerifiedTeamData(teamData);
         setShowCoachCode(false);
         setShowNamePrompt(true);
