@@ -336,33 +336,31 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
 
         {/* iOS install prompt — push werkt alleen als PWA op homescreen */}
         {isIOS() && !isInstalledPWA() && !isPushSupported() && (
-          <div style={{
-            ...card,
-            padding: 16,
-            marginTop: 16,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 12,
-            borderColor: T.accent,
-            borderWidth: 1,
-            borderStyle: 'solid',
-          }}>
+          <div
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({ url: window.location.href }).catch(() => {});
+              }
+            }}
+            style={{
+              ...card,
+              padding: 16,
+              marginTop: 16,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 12,
+              borderColor: T.accent,
+              borderWidth: 1,
+              borderStyle: 'solid',
+              cursor: 'pointer',
+            }}>
             <span style={{ fontSize: 24, flexShrink: 0 }}>📲</span>
             <div>
               <p style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 4 }}>
                 Installeer de app
               </p>
               <p style={{ fontSize: 12, color: T.textDim, lineHeight: 1.4 }}>
-                Tik op{' '}
-                <span style={{ fontWeight: 700 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'text-bottom', marginRight: 2 }}>
-                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                    <polyline points="16 6 12 2 8 6" />
-                    <line x1="12" y1="2" x2="12" y2="15" />
-                  </svg>
-                  Deel
-                </span>{' '}
-                en dan <strong>Zet op beginscherm</strong> voor meldingen bij goals en wissels.
+                Tik hier om het deelmenu te openen en kies <strong>Zet op beginscherm</strong> voor meldingen bij goals en wissels.
               </p>
             </div>
           </div>
