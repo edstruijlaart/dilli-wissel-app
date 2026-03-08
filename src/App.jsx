@@ -101,9 +101,16 @@ export default function App() {
 
   const handleStartOnline = (teamData) => {
     state.setIsOnline(true);
-    if (teamData?.team) state.setTeam(teamData.team);
+    if (teamData?.team) {
+      state.setTeam(teamData.team);
+      state.setHomeTeam(teamData.team);
+    }
     if (teamData?.coachName) state.setCoachName(teamData.coachName);
     if (teamData?.players?.length) state.setPlayers(teamData.players);
+    // Reset keeper + tegenstander + posities bij team switch (worden opnieuw ingevuld in SetupView)
+    state.setKeeper(null);
+    state.setAwayTeam('');
+    state.setPlayerPositions({});
     // Team-specifieke wedstrijdinstellingen toepassen
     if (teamData?.settings) {
       const s = teamData.settings;
