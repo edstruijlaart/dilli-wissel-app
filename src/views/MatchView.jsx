@@ -417,9 +417,19 @@ export default function MatchView({ state }) {
                 interactive={true}
                 onPositionChange={updatePlayerPosition}
                 onPlayerTap={(name) => {
-                  if (onBench.length > 0 && !halfBreak) {
-                    setManualSubMode(manualSubMode === name ? null : name);
+                  if (halfBreak) return;
+                  // Positie swap: twee veldspelers onderling wisselen van positie
+                  if (manualSubMode && manualSubMode !== name) {
+                    const posA = playerPositions[manualSubMode];
+                    const posB = playerPositions[name];
+                    if (posA && posB) {
+                      updatePlayerPosition(manualSubMode, posB);
+                      updatePlayerPosition(name, posA);
+                    }
+                    setManualSubMode(null);
+                    return;
                   }
+                  setManualSubMode(manualSubMode === name ? null : name);
                 }}
                 selectedPlayer={manualSubMode}
                 goalScorers={goalScorers}
@@ -427,7 +437,7 @@ export default function MatchView({ state }) {
             </div>
             {manualSubMode && (
               <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: T.danger, fontWeight: 600 }}>
-                {manualSubMode} geselecteerd — tik op bankspeler als vervanger
+                {manualSubMode} geselecteerd — tik op veldspeler om van positie te wisselen{onBench.length > 0 ? ' of op bankspeler als vervanger' : ''}
               </div>
             )}
           </div>
