@@ -44,7 +44,18 @@ export function useMatchPolling(code) {
     if (!code) return;
     fetchMatch();
     intervalRef.current = setInterval(fetchMatch, POLL_INTERVAL);
-    return () => clearInterval(intervalRef.current);
+
+    // visibilitychange: direct pollen als scherm weer aan gaat
+    // Dit triggert ook checkCoachPush() op de server → push naar coach
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchMatch();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(intervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [code, fetchMatch]);
 
   // Timer berekening: lokaal berekenen op basis van server timestamps

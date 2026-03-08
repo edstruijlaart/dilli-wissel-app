@@ -23,7 +23,7 @@ export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
  * @param {string[]|null} initialBench - Huidige bankspelers (voor herberekening)
  * @returns {Array} schedule - Array van wisselslots
  */
-function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHalves, sInterval, currentPlayTime = {}, excludedList = [], initialField = null, initialBench = null) {
+function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHalves, sInterval, currentPlayTime = {}, excludedList = [], initialField = null, initialBench = null, keeperRotationEnabled = false, keeperQueueList = []) {
   const outfield = playerList.filter(p => p !== keeperName && !excludedList.includes(p));
   const F = numOnField;
   const B = outfield.length - (F - 1); // bench size (F includes keeper)
@@ -34,7 +34,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
 
   const slotsPerHalf = Math.max(1, Math.floor(D / I) - 1);
   const fieldSlots = F - 1; // veldplekken excl. keeper
-  const perSlot = Math.max(1, Math.min(B, Math.min(fieldSlots, Math.round(B * I / D))));
+  // perSlot wordt nu per-slot berekend: eerste slot van elke helft = 2, daarna 1
 
   // Gebruik meegegeven field/bench of bereken initieel
   let field = initialField ? [...initialField] : [keeperName, ...outfield.slice(0, F - 1)];
@@ -61,6 +61,15 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   let slotId = 0;
 
   for (let half = 1; half <= nHalves; half++) {
+    // Keeper per helft: bij keeper roulatie kan de keeper per helft verschillen
+    const halfKeeper = (keeperRotationEnabled && keeperQueueList.length > 0)
+      ? keeperQueueList[(half - 1) % keeperQueueList.length]
+      : keeperName;
+    const nextHalfKeeper = (keeperRotationEnabled && keeperQueueList.length > 0 && half < nHalves)
+      ? keeperQueueList[half % keeperQueueList.length]
+      : null;
+    let isFirstSlotOfHalf = true;
+
     const slotTimes = [];
     const MIN_BEFORE_END = 120; // 2 minuten voor einde helft niet meer wisselen
     for (let s = 1; s <= slotsPerHalf; s++) {
@@ -70,14 +79,22 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
 
     let prevSlotTime = 0;
     for (const slotTime of slotTimes) {
+      // Eerste slot van helft: 2 spelers wisselen, daarna 1
+      const perSlot = isFirstSlotOfHalf ? Math.min(2, bench.length, fieldSlots) : 1;
+
       // Update projected speeltijd voor veldspelers
       const delta = slotTime - prevSlotTime;
-      field.filter(p => p !== keeperName).forEach(p => {
+      field.filter(p => p !== halfKeeper).forEach(p => {
         projected[p] = (projected[p] || 0) + delta;
       });
 
       // Wie eruit: veldspelers met MEESTE speeltijd, bij gelijk: langst op veld
-      const eligible = field.filter(p => p !== keeperName);
+      let eligible = field.filter(p => p !== halfKeeper);
+      // Bescherm next-half keeper: niet wisselen in laatste slot voor rust
+      const isLastSlot = slotTime === slotTimes[slotTimes.length - 1];
+      if (isLastSlot && nextHalfKeeper && nextHalfKeeper !== halfKeeper && eligible.includes(nextHalfKeeper)) {
+        eligible = eligible.filter(p => p !== nextHalfKeeper);
+      }
       eligible.sort((a, b) => {
         const ptDiff = (projected[b] || 0) - (projected[a] || 0);
         if (ptDiff !== 0) return ptDiff;
@@ -109,7 +126,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
         // Spelers die op bank bleven: wachttijd +1
         bench.filter(p => !goingIn.includes(p)).forEach(p => { benchWait[p] = (benchWait[p] || 0) + 1; });
         // Veldspelers die bleven: streak +1
-        field.filter(p => p !== keeperName && !goingOut.includes(p)).forEach(p => { fieldStreak[p] = (fieldStreak[p] || 0) + 1; });
+        field.filter(p => p !== halfKeeper && !goingOut.includes(p)).forEach(p => { fieldStreak[p] = (fieldStreak[p] || 0) + 1; });
         // Nieuw op bank: start wachttijd
         goingOut.forEach(p => { benchWait[p] = 1; fieldStreak[p] = 0; });
         // Terug op veld: reset wachttijd
@@ -118,6 +135,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
         // Pas field/bench aan voor volgende slot
         field = field.filter(p => !goingOut.includes(p)).concat(goingIn);
         bench = bench.filter(p => !goingIn.includes(p)).concat(goingOut);
+        isFirstSlotOfHalf = false;
       }
 
       prevSlotTime = slotTime;
@@ -126,7 +144,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
     // Einde helft: resterende speeltijd optellen
     if (slotTimes.length > 0) {
       const remaining = D - slotTimes[slotTimes.length - 1];
-      field.filter(p => p !== keeperName).forEach(p => {
+      field.filter(p => p !== halfKeeper).forEach(p => {
         projected[p] = (projected[p] || 0) + remaining;
       });
     }
@@ -139,7 +157,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
  * Herbereken resterende wisselslots na skip/injury/edit.
  * Behoudt alle executed/skipped slots, herberekent pending slots.
  */
-function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBench, currentPlayTime, keeperName, hDuration, nHalves, sInterval, excluded) {
+function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBench, currentPlayTime, keeperName, hDuration, nHalves, sInterval, excluded, keeperRotationEnabled = false, keeperQueueList = []) {
   // Behoud alle slots t/m fromIndex (executed/skipped)
   const fixed = schedule.filter((s, i) => i <= fromIndex);
 
@@ -151,7 +169,8 @@ function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBen
     allPlayers, keeperName, currentField.length,
     hDuration, nHalves, sInterval,
     currentPlayTime, excluded,
-    currentField, currentBench
+    currentField, currentBench,
+    keeperRotationEnabled, keeperQueueList
   );
 
   // Filter: alleen slots die NA het huidige absolute moment vallen
@@ -470,15 +489,16 @@ export function useMatchState() {
     }
     // Wisselschema: genereer pre-calculated schedule bij start (alleen als autoSubs aan)
     if (autoSubs) {
-      const schedule = generateSubSchedule(players, keeper, playersOnField, halfDuration, halves, subInterval);
+      const schedule = generateSubSchedule(
+        players, keeper, playersOnField, halfDuration, halves, subInterval,
+        {}, [], null, null, keeperRotation, keeperQueue
+      );
       setSubSchedule(schedule);
       setActiveSlotIndex(-1);
       setExcludedPlayers([]);
       setScheduleVersion(1);
-      const B = players.length - playersOnField;
-      const I = subInterval * 60;
-      const D = halfDuration * 60;
-      setSubsPerSlot(Math.max(1, Math.min(B, Math.round(B * I / D))));
+      // subsPerSlot niet meer globaal relevant — eerste slot = 2, rest = 1
+      setSubsPerSlot(1);
     } else {
       setSubSchedule([]);
       setActiveSlotIndex(-1);
@@ -534,7 +554,12 @@ export function useMatchState() {
   useEffect(() => {
     if (!isOnline || !matchCode || !isRunning || isPaused || halfBreak) return;
     const iv = setInterval(syncToServer, 10000);
-    return () => clearInterval(iv);
+    // Bij scherm-aan: meteen sync zodat server actuele timer timestamps heeft
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncToServer();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [isOnline, matchCode, isRunning, isPaused, halfBreak, syncToServer]);
 
   // --- Multi-coach polling: adopteer wijzigingen van andere coaches + events ophalen ---
@@ -566,7 +591,13 @@ export function useMatchState() {
       } catch { /* ignore */ }
     };
     const iv = setInterval(poll, 3000);
-    return () => clearInterval(iv);
+    // visibilitychange: direct pollen als scherm weer aan gaat
+    // Triggert ook checkCoachPush() op server → coach krijgt push
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') poll();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [isOnline, matchCode, view, applyServerSnapshot]);
 
   // Half end + sub alert detection
@@ -634,7 +665,8 @@ export function useMatchState() {
           const newBench = onBench.filter(p => !inn.includes(p)).concat(out);
           const recalc = recalculateRemainingSlots(
             updated, activeSlotIndex, newField, newBench, playTime,
-            matchKeeper, halfDuration, halves, subInterval, excludedPlayers
+            matchKeeper, halfDuration, halves, subInterval, excludedPlayers,
+            keeperRotation, keeperQueue
           );
           setScheduleVersion(v => v + 1);
           return recalc;
@@ -662,7 +694,8 @@ export function useMatchState() {
         // Herbereken toekomstige slots met actuele speeltijden
         const recalc = recalculateRemainingSlots(
           updated, activeSlotIndex, onField, onBench, playTime,
-          matchKeeper, halfDuration, halves, subInterval, excludedPlayers
+          matchKeeper, halfDuration, halves, subInterval, excludedPlayers,
+          keeperRotation, keeperQueue
         );
         setScheduleVersion(v => v + 1);
         return recalc;
@@ -744,7 +777,8 @@ export function useMatchState() {
     setSubSchedule(prev => {
       const recalc = recalculateRemainingSlots(
         prev, activeSlotIndex >= 0 ? activeSlotIndex : prev.findIndex(s => s.status === 'pending') - 1,
-        newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, newExcluded
+        newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, newExcluded,
+        keeperRotation, keeperQueue
       );
       setScheduleVersion(v => v + 1);
       return recalc;

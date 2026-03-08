@@ -371,7 +371,7 @@ export default function MatchView({ state }) {
                       <select value={p} onChange={e => editSubProposal(i, 'out', e.target.value)} style={{
                         flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
                         background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                        color: T.text, minWidth: 0, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        color: T.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
                         {outOptions.map(op => <option key={op} value={op}>{op.length > 14 ? op.slice(0, 13) + '…' : op} ({fmt(playTime[op] || 0)})</option>)}
                       </select>
@@ -379,7 +379,7 @@ export default function MatchView({ state }) {
                       <select value={suggestedSubs.inn[i]} onChange={e => editSubProposal(i, 'inn', e.target.value)} style={{
                         flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
                         background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                        color: T.text, minWidth: 0, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        color: T.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
                         {innOptions.map(op => <option key={op} value={op}>{op.length > 14 ? op.slice(0, 13) + '…' : op} ({fmt(playTime[op] || 0)})</option>)}
                       </select>
