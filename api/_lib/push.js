@@ -1,11 +1,21 @@
 import webpush from 'web-push';
 import { redis } from './redis.js';
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:ed@edstruijlaart.nl',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+// Trim VAPID keys — Vercel env vars often contain trailing newlines
+const vapidPublic = (process.env.VAPID_PUBLIC_KEY || '').trim();
+const vapidPrivate = (process.env.VAPID_PRIVATE_KEY || '').trim();
+const vapidSubject = (process.env.VAPID_SUBJECT || 'mailto:ed@edstruijlaart.nl').trim();
+
+if (vapidPublic && vapidPrivate) {
+  try {
+    webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+  } catch (err) {
+    console.error('VAPID setup failed:', err.message);
+    console.error('Public key length:', vapidPublic.length, 'Private key length:', vapidPrivate.length);
+  }
+} else {
+  console.error('VAPID keys missing! Public:', !!vapidPublic, 'Private:', !!vapidPrivate);
+}
 
 /**
  * Send push notification to a single subscription.

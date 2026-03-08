@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.18.0
+**Status**: Actief productie — v3.20.0
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -18,7 +18,8 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 | Component | Technologie | Doel |
 |-----------|-------------|------|
 | Framework | React 18 + Vite 6 | Frontend + build |
-| PWA | vite-plugin-pwa (Workbox) | Installeerbaar op homescreen |
+| PWA | vite-plugin-pwa (injectManifest) | Installeerbaar + push notifications |
+| Push | Web Push API + web-push | Coach/kijker notificaties (VAPID) |
 | Styling | Inline CSS-in-JS | Geen build-stap voor styles |
 | Fonts | Google Fonts | DM Sans + JetBrains Mono |
 | Audio (tonen) | Tone.js 14 | Fluitsignalen |
@@ -34,8 +35,8 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.18.0
-├── vite.config.js                # Vite + React + PWA config
+├── package.json                  # v3.20.0
+├── vite.config.js                # Vite + React + PWA config (injectManifest)
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
 │
@@ -55,15 +56,22 @@ dilli-wissel-app/
 │   │   └── delete-match.js      # Admin: wedstrijd verwijderen
 │   ├── secretariaat/
 │   │   └── verify.js            # Secretariaat authenticatie verificatie
+│   ├── _lib/
+│   │   ├── redis.js             # Upstash Redis client + MATCH_TTL
+│   │   └── push.js              # Web Push utility: sendPush, sendPushToAll, checkDedup
+│   ├── push/
+│   │   ├── subscribe.js         # POST: PushSubscription opslaan (coach/viewer)
+│   │   ├── vapid-key.js         # GET: VAPID public key ophalen
+│   │   └── test.js              # GET: push diagnostics, POST: test push met per-device resultaten
 │   ├── kleedkamers.js           # GET/PUT: kleedkamer toewijzingen (Vercel KV)
 │   ├── schedule.js              # GET: VoetbalAssist proxy (wedstrijdprogramma, cache 5 min)
 │   └── match/
 │       ├── create.js            # POST: wedstrijd aanmaken, 4-letter code genereren
 │       ├── live.js              # GET: live wedstrijden overzicht (voor HomeView)
 │       ├── save.js              # POST: wedstrijd opslaan in historie (permanent KV, max 100/team)
-│       ├── [code].js            # GET/PUT: match state (Vercel KV)
+│       ├── [code].js            # GET/PUT: match state + server-side coach push checks
 │       ├── events/
-│       │   └── [code].js        # GET/POST: event log (goals, wissels, foto's, audio_start)
+│       │   └── [code].js        # GET/POST: event log + viewer push bij goals/wissels/einde
 │       ├── audio/
 │       │   └── [code].js        # GET/POST/DELETE: audio messages (Vercel Blob)
 │       └── photo/
@@ -72,6 +80,7 @@ dilli-wissel-app/
 └── src/
     ├── main.jsx                  # React root mount
     ├── version.js                # VERSION constante — update bij elke release!
+    ├── sw.js                     # Custom Service Worker: push + notificationclick + Workbox precaching
     ├── App.jsx                   # Hoofd router: HomeView | SetupView | MatchView | SummaryView | ViewerView | AdminView | SecretariaatView
     ├── theme.js                  # Design tokens: kleuren, card, btnP, btnS, btnD, mono
     │
@@ -81,7 +90,8 @@ dilli-wissel-app/
     ├── utils/
     │   ├── format.js             # fmt(seconds) → "mm:ss", parseNames()
     │   ├── audio.js              # playWhistle(), vibrate(), notifyGoal() via Tone.js
-    │   └── confetti.js           # fireConfetti() canvas animatie bij doelpunten
+    │   ├── confetti.js           # fireConfetti() canvas animatie bij doelpunten
+    │   └── pushNotifications.js  # isPushSupported, subscribeToPush, isIOS, isInstalledPWA
     │
     ├── hooks/
     │   ├── useMatchState.js      # CENTRALE STATE: alle wedstrijd state + wisselalgoritme
@@ -111,6 +121,7 @@ dilli-wissel-app/
     │   │                         # Coach (isCoach=true): alle updates, × delete knop voor audio + foto
     │   │                         # Viewer (maxItems=1): alleen laatste update ("Laatste Update")
     │   │                         # Polt elke 10s (audio via Blob list, foto's via events API)
+    │   ├── PushPermissionBanner.jsx # Push notificatie permissie banner (coach + viewer)
     │   └── PhotoCapture.jsx      # Camera + bibliotheek foto upload (coach)
     │                             # Props: matchCode, onClose, onPhotoUploaded({url, caption})
     │                             # Features: camera (environment-facing), bibliotheek kiezen,
@@ -159,6 +170,10 @@ dilli-wissel-app/
 - **Setup**: spelers invoeren (handmatig of clipboard paste), keeper aanwijzen, config instellen
 - **Live timer**: helft/halves, progressbar, wissel countdown, pause, blessuretijd
 - **Score**: +/- knoppen, doelpuntscorer popup (wie scoorde?)
+- **Push notifications** (v3.20.0): Web Push API voor coach + kijker, ook bij scherm uit
+  - Coach: wisseladvies, rust, einde wedstrijd, blessuretijd voorbij (server-side timer detection)
+  - Kijker: goals, wissels, rust, einde wedstrijd, foto's (event-triggered)
+  - iOS: installatie-prompt voor PWA (push vereist homescreen installatie)
 - **Wisselalgoritme** (v3.18.0): pre-berekend wisselschema voor maximale eerlijke speeltijd
   - `generateSubSchedule()` berekent volledig schema bij match start over alle helften
   - `subsPerSlot = max(1, min(B, min(fieldSlots, round(B*I/D))))` — optimaal aantal wissels per moment
@@ -190,6 +205,7 @@ dilli-wissel-app/
 
 ### Kijker
 - **Live volgen**: score, timer, veld/bank bezetting via polling (5s interval)
+- **Push notifications**: goals, wissels, rust, einde, foto's — ook bij app op achtergrond
 - **Tactiek view**: FieldView (read-only) met formatie, rugnummers en posities (als coach tactiek modus gebruikt)
 - **Laatste update**: meest recente audio of foto bovenaan
 - **Doelpunt notificatie**: confetti + toast bij goals
@@ -209,8 +225,22 @@ Coach → PUT /api/match/{code} → Redis (TTL 8u)
 ### Events (Vercel KV)
 ```
 Coach addEvent() → POST /api/match/events/{code} → Redis array
-  - type: 'goal_home' | 'goal_away' | 'sub' | 'photo'
+  - type: 'goal_home' | 'goal_away' | 'sub_auto' | 'sub_manual' | 'photo' | 'half_end' | ...
   - time, half, url (foto), caption (foto), scorer (goal)
+  → Bij POST: buildViewerPush() stuurt push naar alle viewer subscriptions
+```
+
+### Push Notifications (Web Push API)
+```
+Coach/Kijker → subscribeToPush() → POST /api/push/subscribe
+  → KV: push:{CODE}:coach | push:{CODE}:viewer (array van PushSubscriptions)
+
+Coach push (server-side): GET /api/match/{code} checkt timer milestones
+  → Dedup via KV: push:sub:{CODE}:{half}:{slot} | push:half:{CODE}:{half} | push:end:{CODE}
+  → sendPushToAll(code, 'coach', payload)
+
+Kijker push (event-triggered): POST /api/match/events/{code}
+  → buildViewerPush(event, score) → sendPushToAll(code, 'viewer', payload)
 ```
 
 ### Audio Updates (Vercel Blob)
@@ -241,6 +271,9 @@ Coach → PhotoCapture → POST /api/match/photo/upload
 | `KV_REST_API_TOKEN` | Vercel KV token |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob (audio) |
 | `BLOB2_READ_WRITE_TOKEN` | Vercel Blob (foto's, apart store) |
+| `VAPID_PUBLIC_KEY` | Web Push VAPID public key |
+| `VAPID_PRIVATE_KEY` | Web Push VAPID private key |
+| `VAPID_SUBJECT` | Web Push contact (`mailto:ed@edstruijlaart.nl`) |
 | `ADMIN_PASSWORD` | Admin panel toegang |
 | `SECRETARIAAT_PASSWORD` | Secretariaat panel toegang |
 
@@ -278,6 +311,9 @@ mono    // JetBrains Mono font stijl
 | Foto upload mislukt | Controleer BLOB2_READ_WRITE_TOKEN in Vercel env vars |
 | Audio message niet zichtbaar | Blob metadata via `addMetadata` — check of `blob.metadata?.message` beschikbaar is in list() |
 | foto's niet in feed | Events API URL was `/api/match/{code}/events` maar moet zijn `/api/match/events/{code}` |
+| **VAPID env vars met newlines** | Vercel dashboard plakt trailing `\n` mee bij env vars. Crasht `webpush.setVapidDetails()` op module-niveau → ALLE push-gerelateerde API routes crashen. Fix: `.trim()` in `push.js` + `vapid-key.js`. Bij nieuwe keys: `printf 'KEY' \| vercel env add` (geen echo, geen newline) |
+| Push werkt niet na VAPID key wissel | Oude PushSubscriptions zijn gekoppeld aan oude VAPID key. Gebruiker moet "Herregistreer push" tappen in PushPermissionBanner of PWA herinstalleren |
+| Test push crasht (FUNCTION_INVOCATION_FAILED) | Check VAPID keys: `curl /api/push/test?matchCode=TEST` toont key lengths. Als 0 of abnormaal: keys opnieuw zetten |
 
 ---
 
