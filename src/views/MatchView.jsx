@@ -27,10 +27,20 @@ export default function MatchView({ state }) {
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
     viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
     matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
-    subSchedule, activeSlotIndex, subsPerSlot,
+    subSchedule, activeSlotIndex, subsPerSlot, subHistory,
   } = state;
 
   const showFieldView = playersOnField >= 7;
+
+  // Wisselcount per speler: hoe vaak in/uit gewisseld
+  const subCounts = React.useMemo(() => {
+    const counts = {};
+    (subHistory || []).forEach(s => {
+      (s.out || []).forEach(p => { counts[p] = (counts[p] || 0) + 1; });
+      (s.inn || []).forEach(p => { counts[p] = (counts[p] || 0) + 1; });
+    });
+    return counts;
+  }, [subHistory]);
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
@@ -442,6 +452,7 @@ export default function MatchView({ state }) {
                       {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {(subCounts[p] || 0) > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "1px 5px" }}>↕{subCounts[p]}</span>}
                       <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
                       {isSel && <span style={{ fontSize: 11, color: T.danger, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>{Icons.arrowDown(12)} kies vervanger</span>}
                     </div>
@@ -471,6 +482,7 @@ export default function MatchView({ state }) {
                     {(goalScorers?.[p] || 0) > 0 && <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>⚽{goalScorers[p] > 1 ? ` ${goalScorers[p]}` : ''}</span>}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {(subCounts[p] || 0) > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, background: "rgba(0,0,0,0.05)", borderRadius: 6, padding: "1px 5px" }}>↕{subCounts[p]}</span>}
                     <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
                     {manualSubMode && <span style={{ fontSize: 11, color: T.accent, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>{Icons.arrowUp(12)} tap</span>}
                   </div>
