@@ -138,6 +138,9 @@ export default async function handler(req, res) {
       match.code = code.toUpperCase();
       await redis.set(key, JSON.stringify(match), { ex: MATCH_TTL });
 
+      // Push checks on coach sync — ensures push fires even without active viewers
+      await checkCoachPush(code.toUpperCase(), match);
+
       return res.status(200).json(match);
     } catch (err) {
       console.error('Update match error:', err);
