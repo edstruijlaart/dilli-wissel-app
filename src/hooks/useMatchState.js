@@ -48,6 +48,15 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   const projected = {};
   outfield.forEach(p => { projected[p] = currentPlayTime[p] || 0; });
 
+  // v3.31.0 — Eerlijkheid in beleving: track consecutieve bank/veld-slots
+  // Voorkomt dat een kind meerdere rondes achter elkaar op de bank zit
+  const benchWait = {};   // Hoeveel opeenvolgende wisselslots op de bank
+  const fieldStreak = {}; // Hoeveel opeenvolgende wisselslots op het veld
+  outfield.forEach(p => {
+    benchWait[p] = bench.includes(p) ? 1 : 0;
+    fieldStreak[p] = field.includes(p) ? 1 : 0;
+  });
+
   const schedule = [];
   let slotId = 0;
 
@@ -67,13 +76,21 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
         projected[p] = (projected[p] || 0) + delta;
       });
 
-      // Wie eruit: veldspelers (excl. keeper) met MEESTE projected speeltijd
+      // Wie eruit: veldspelers met MEESTE speeltijd, bij gelijk: langst op veld
       const eligible = field.filter(p => p !== keeperName);
-      eligible.sort((a, b) => (projected[b] || 0) - (projected[a] || 0));
+      eligible.sort((a, b) => {
+        const ptDiff = (projected[b] || 0) - (projected[a] || 0);
+        if (ptDiff !== 0) return ptDiff;
+        return (fieldStreak[b] || 0) - (fieldStreak[a] || 0);
+      });
       const goingOut = eligible.slice(0, perSlot);
 
-      // Wie erin: bankspelers met MINSTE projected speeltijd
-      const benchSorted = [...bench].sort((a, b) => (projected[a] || 0) - (projected[b] || 0));
+      // Wie erin: bankspelers met LANGSTE WACHTTIJD eerst, bij gelijk: minste speeltijd
+      const benchSorted = [...bench].sort((a, b) => {
+        const waitDiff = (benchWait[b] || 0) - (benchWait[a] || 0);
+        if (waitDiff !== 0) return waitDiff;
+        return (projected[a] || 0) - (projected[b] || 0);
+      });
       const goingIn = benchSorted.slice(0, perSlot);
 
       if (goingOut.length > 0 && goingIn.length > 0) {
@@ -87,6 +104,16 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
           status: 'pending',
           executedAt: null,
         });
+
+        // Update eerlijkheid-tracking vóór field/bench swap
+        // Spelers die op bank bleven: wachttijd +1
+        bench.filter(p => !goingIn.includes(p)).forEach(p => { benchWait[p] = (benchWait[p] || 0) + 1; });
+        // Veldspelers die bleven: streak +1
+        field.filter(p => p !== keeperName && !goingOut.includes(p)).forEach(p => { fieldStreak[p] = (fieldStreak[p] || 0) + 1; });
+        // Nieuw op bank: start wachttijd
+        goingOut.forEach(p => { benchWait[p] = 1; fieldStreak[p] = 0; });
+        // Terug op veld: reset wachttijd
+        goingIn.forEach(p => { benchWait[p] = 0; fieldStreak[p] = 1; });
 
         // Pas field/bench aan voor volgende slot
         field = field.filter(p => !goingOut.includes(p)).concat(goingIn);
