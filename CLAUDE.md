@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.20.0
+**Status**: Actief productie — v3.21.0
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -314,6 +314,7 @@ mono    // JetBrains Mono font stijl
 | **VAPID env vars met newlines** | Vercel dashboard plakt trailing `\n` mee bij env vars. Crasht `webpush.setVapidDetails()` op module-niveau → ALLE push-gerelateerde API routes crashen. Fix: `.trim()` in `push.js` + `vapid-key.js`. Bij nieuwe keys: `printf 'KEY' \| vercel env add` (geen echo, geen newline) |
 | Push werkt niet na VAPID key wissel | Oude PushSubscriptions zijn gekoppeld aan oude VAPID key. Gebruiker moet "Herregistreer push" tappen in PushPermissionBanner of PWA herinstalleren |
 | Test push crasht (FUNCTION_INVOCATION_FAILED) | Check VAPID keys: `curl /api/push/test?matchCode=TEST` toont key lengths. Als 0 of abnormaal: keys opnieuw zetten |
+| iOS push niet op vergrendelscherm | iOS vereist handmatig: Instellingen → Meldingen → Dilli Wissel → Toegangsscherm aan. App toont eenmalige tip na eerste subscribe (v3.21.0) |
 
 ---
 
