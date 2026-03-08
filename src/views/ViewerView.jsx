@@ -9,6 +9,7 @@ import Badge from '../components/Badge';
 import Icons from '../components/Icons';
 import AudioTimeline from '../components/AudioTimeline';
 import FieldView from '../components/FieldView';
+import PushPermissionBanner from '../components/PushPermissionBanner';
 
 
 export default function ViewerView({ code, onBack }) {
@@ -133,13 +134,16 @@ export default function ViewerView({ code, onBack }) {
           </div>
         </div>
 
+        {/* Push notification permission */}
+        <PushPermissionBanner matchCode={code} role="viewer" />
+
         {/* Timer */}
         <div style={{ ...card, padding: "20px 24px", marginBottom: 12, textAlign: "center" }}>
           <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
             Helft {match.currentHalf} van {match.halves}
           </div>
           <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(elapsed)}</div>
-          {match.matchMode !== "tactiek" && match.isRunning && !match.isPaused && !match.halfBreak && (
+          {match.autoSubs && match.isRunning && !match.isPaused && !match.halfBreak && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Wissel over {fmt(Math.max(0, match.subInterval * 60 - subElapsed))}</div>
           )}
         </div>
@@ -170,7 +174,7 @@ export default function ViewerView({ code, onBack }) {
 
         {/* Veld */}
         {match.onField && match.onField.length > 0 && (
-          match.matchMode === "tactiek" && match.playerPositions ? (
+          match.onField.length >= 7 && match.playerPositions ? (
             <div style={{ ...card, padding: 16, marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />

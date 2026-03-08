@@ -12,6 +12,7 @@ import { assignPlayersToFormation } from '../data/formations';
 import AudioRecorder from '../components/AudioRecorder';
 import AudioTimeline from '../components/AudioTimeline';
 import PhotoCapture from '../components/PhotoCapture';
+import PushPermissionBanner from '../components/PushPermissionBanner';
 import { VIEWS } from '../hooks/useMatchState';
 
 export default function MatchView({ state }) {
@@ -156,6 +157,8 @@ export default function MatchView({ state }) {
             )}
           </div>
         )}
+        {/* Push notification permission */}
+        {isOnline && matchCode && <PushPermissionBanner matchCode={matchCode} role="coach" />}
         {/* Timer */}
         <div style={{ ...card, padding: 20, marginBottom: 10, position: "relative", overflow: "hidden" }}>
           {autoSubs && urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
