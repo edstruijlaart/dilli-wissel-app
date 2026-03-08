@@ -28,6 +28,7 @@ export default function MatchView({ state }) {
     viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
     matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
     subSchedule, activeSlotIndex, subsPerSlot, subHistory,
+    keeperRotation, keeperQueue,
   } = state;
 
   const showFieldView = playersOnField >= 7;
@@ -320,7 +321,18 @@ export default function MatchView({ state }) {
           <div style={{ ...card, padding: 24, marginBottom: 10, textAlign: "center", borderColor: T.warnDim, background: "rgba(217,119,6,0.04)", animation: "slideIn 0.2s ease" }}>
             <div style={{ marginBottom: 8 }}>{Icons.whistle(32, T.warn)}</div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: T.warn, margin: "0 0 8px" }}>Rust!</h2>
-            <p style={{ color: T.textDim, fontSize: 14, marginBottom: 16 }}>Klaar voor helft {currentHalf + 1}?</p>
+            <p style={{ color: T.textDim, fontSize: 14, marginBottom: keeperRotation ? 10 : 16 }}>Klaar voor helft {currentHalf + 1}?</p>
+            {keeperRotation && keeperQueue.length > 0 && (() => {
+              const nextKeeper = keeperQueue[currentHalf % keeperQueue.length];
+              if (!nextKeeper || nextKeeper === matchKeeper) return null;
+              return (
+                <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(217,119,6,0.08)", border: `1px solid ${T.keeperDim}`, marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14 }}>
+                  {Icons.glove(14, T.keeper)}
+                  <span style={{ color: T.keeper, fontWeight: 600 }}>{nextKeeper}</span>
+                  <span style={{ color: T.textMuted }}>wordt keeper</span>
+                </div>
+              );
+            })()}
             <button onClick={startNextHalf} style={{ ...btnP, width: "100%", padding: "14px 0", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{Icons.play(14, "#FFFFFF")} Start helft {currentHalf + 1}</button>
           </div>
         )}

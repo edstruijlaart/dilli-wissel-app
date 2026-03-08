@@ -188,6 +188,10 @@ export function useMatchState() {
   const [playerPositions, setPlayerPositions] = useState({}); // { "Bobby": { x: 50, y: 85 } }
   const [squadNumbers, setSquadNumbers] = useState({}); // { "Bobby": 1 }
 
+  // Keeper roulatie (v3.30.0) — optionele keeper per helft
+  const [keeperRotation, setKeeperRotation] = useState(false);
+  const [keeperQueue, setKeeperQueue] = useState([]); // Per-helft keeper: ["Luuk", "Daan", "Morris", ...]
+
   // Wisselschema state (v3.16.0 — pre-calculated substitution schedule)
   const [subSchedule, setSubSchedule] = useState([]); // [{id, half, time, absoluteTime, out, inn, status, executedAt}]
   const [activeSlotIndex, setActiveSlotIndex] = useState(-1); // Index van actief wisselmoment (-1 = geen)
@@ -238,13 +242,15 @@ export function useMatchState() {
     injuryTime,
     isRunning, isPaused, halfBreak,
     matchMode, autoSubs, formation, playerPositions, squadNumbers,
+    // Keeper roulatie (v3.30.0)
+    keeperRotation, keeperQueue,
     // Wisselschema sync (v3.16.0)
     subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
     // Alert state (voor reconnect restore)
     showSubAlert, suggestedSubs,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
-  }), [view, team, coachName, homeTeam, awayTeam, homeLogo, awayLogo, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
+  }), [view, team, coachName, homeTeam, awayTeam, homeLogo, awayLogo, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, keeperRotation, keeperQueue, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -370,6 +376,7 @@ export function useMatchState() {
         body: JSON.stringify({
           team, homeTeam, awayTeam, homeLogo, awayLogo, players, keeper,
           playersOnField, halfDuration, halves, subInterval,
+          keeperRotation, keeperQueue,
         }),
       });
       const data = await res.json();
@@ -393,7 +400,7 @@ export function useMatchState() {
       setSyncError('Wedstrijd aanmaken mislukt');
       return null;
     }
-  }, [team, homeTeam, awayTeam, homeLogo, awayLogo, players, keeper, playersOnField, halfDuration, halves, subInterval]);
+  }, [team, homeTeam, awayTeam, homeLogo, awayLogo, players, keeper, playersOnField, halfDuration, halves, subInterval, keeperRotation, keeperQueue]);
 
   // --- Bestaande logica ---
   const addPlayer = () => { const n = newPlayer.trim(); if (n && !players.includes(n)) { setPlayers([...players, n]); setNewPlayer(""); } };
@@ -737,13 +744,49 @@ export function useMatchState() {
     setSubTimer(0);
     alertShownRef.current = false;
     subLatencyRef.current = 0;
+
+    // Keeper roulatie: auto-swap keeper bij helft-overgang
+    let activeKeeper = matchKeeper;
+    if (keeperRotation && keeperQueue.length > 0) {
+      const nextKeeper = keeperQueue[(nextHalf - 1) % keeperQueue.length];
+      // Alleen swappen als volgende keeper beschikbaar is (niet uitgevallen)
+      if (nextKeeper && nextKeeper !== matchKeeper && !excludedPlayers.includes(nextKeeper)) {
+        const isOnFieldNow = onField.includes(nextKeeper);
+        const isOnBenchNow = onBench.includes(nextKeeper);
+        if (isOnFieldNow) {
+          // Veldspeler → keeper: alleen rol-swap, geen fysieke wissel
+          setMatchKeeper(nextKeeper);
+          activeKeeper = nextKeeper;
+          setSubHistory(h => [...h, { time: fmt(matchTimer), half: nextHalf, keeperChange: true, newKeeper: nextKeeper }]);
+          addEvent({ type: 'keeper_rotation', time: fmt(matchTimer), half: nextHalf, newKeeper: nextKeeper });
+        } else if (isOnBenchNow) {
+          // Bankspeler → keeper: fysieke wissel met huidige keeper
+          const oldKeeper = matchKeeper;
+          setOnField(prev => prev.map(p => p === oldKeeper ? nextKeeper : p));
+          setOnBench(prev => prev.map(p => p === nextKeeper ? oldKeeper : p));
+          setMatchKeeper(nextKeeper);
+          activeKeeper = nextKeeper;
+          // Positie overnemen
+          if (playersOnField >= 7) {
+            setPlayerPositions(prev => {
+              const n = { ...prev };
+              if (n[oldKeeper]) { n[nextKeeper] = { ...n[oldKeeper] }; delete n[oldKeeper]; }
+              return n;
+            });
+          }
+          setSubHistory(h => [...h, { time: fmt(matchTimer), half: nextHalf, out: [oldKeeper], inn: [nextKeeper], keeperChange: true, newKeeper: nextKeeper }]);
+          addEvent({ type: 'keeper_rotation', time: fmt(matchTimer), half: nextHalf, newKeeper: nextKeeper, swappedOut: oldKeeper });
+        }
+      }
+    }
+
     addEvent({ type: 'half_start', time: fmt(matchTimer), half: nextHalf });
     // Toon eerste wissel van nieuwe helft als er bankspelers zijn
     if (onBench.length > 0) {
       // Zoek volgende pending slot (in het nieuwe helft-gedeelte van schema)
       const nextIdx = subSchedule.findIndex(s => s.status === 'pending');
       if (nextIdx >= 0) setActiveSlotIndex(nextIdx);
-      setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper));
+      setSuggestedSubs(calculateSubs(onField, onBench, playTime, activeKeeper));
       setShowSubAlert(true);
       notifySub();
     }
@@ -871,6 +914,8 @@ export function useMatchState() {
       setAutoSubs(data.autoSubs != null ? data.autoSubs : (data.matchMode !== "tactiek"));
       setFormation(data.formation || null);
       setSquadNumbers(data.squadNumbers || {});
+      setKeeperRotation(data.keeperRotation || false);
+      setKeeperQueue(data.keeperQueue || []);
 
       // Live match state + timer via gedeelde functie
       applyServerSnapshot(data);
@@ -948,6 +993,8 @@ export function useMatchState() {
     matchMode, setMatchMode, autoSubs, setAutoSubs, formation, setFormation,
     playerPositions, setPlayerPositions, updatePlayerPosition,
     squadNumbers, setSquadNumbers,
+    // Keeper roulatie (v3.30.0)
+    keeperRotation, setKeeperRotation, keeperQueue, setKeeperQueue,
     // Wisselschema (v3.16.0)
     subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
     // Multiplayer

@@ -113,6 +113,8 @@ export default function App() {
     state.setHomeLogo(null);
     state.setAwayLogo(null);
     state.setPlayerPositions({});
+    state.setKeeperRotation(false);
+    state.setKeeperQueue([]);
     // Team-specifieke wedstrijdinstellingen toepassen
     if (teamData?.settings) {
       const s = teamData.settings;

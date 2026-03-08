@@ -25,6 +25,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     addPlayer, removePlayer, movePlayer, toggleKeeper,
     matchMode, autoSubs, formation, setFormation, playerPositions, setPlayerPositions,
     updatePlayerPosition, squadNumbers,
+    keeperRotation, setKeeperRotation, keeperQueue, setKeeperQueue,
   } = state;
 
   const showFieldView = playersOnField >= 7;
@@ -283,6 +284,83 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           </div>
           {players.length > 0 && <button onClick={() => { setPlayers([]); setKeeper(null); }} style={{ background: "none", border: "none", color: T.textMuted, fontSize: 12, cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans',sans-serif" }}>Alles wissen</button>}
         </div>
+
+        {/* Keeper roulatie (v3.30.0) — optioneel wisselende keeper per helft */}
+        {keeper && halves >= 2 && (
+          <div style={{ ...card, padding: 20, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: keeperRotation ? 14 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {Icons.glove(16, T.keeper)}
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>Wisselende keeper</span>
+              </div>
+              <button onClick={() => {
+                const next = !keeperRotation;
+                setKeeperRotation(next);
+                if (next && keeperQueue.length === 0) {
+                  // Start queue met huidige keeper als H1
+                  setKeeperQueue([keeper]);
+                }
+                if (!next) setKeeperQueue([]);
+              }} style={{ width: 44, height: 26, borderRadius: 13, border: "none", cursor: "pointer", background: keeperRotation ? T.accent : T.glass, position: "relative", transition: "background 0.2s" }}>
+                <div style={{ width: 20, height: 20, borderRadius: 10, background: "#fff", position: "absolute", top: 3, left: keeperRotation ? 21 : 3, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+              </button>
+            </div>
+            {keeperRotation && (
+              <div>
+                <p style={{ fontSize: 12, color: T.textMuted, marginBottom: 10 }}>Tik een speler om keeper per helft in te stellen</p>
+                {/* Queue per helft */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                  {Array.from({ length: halves }, (_, h) => {
+                    const assignedKeeper = keeperQueue[h] || null;
+                    return (
+                      <div key={h} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, background: assignedKeeper ? "rgba(217,119,6,0.06)" : T.glass, border: `1px solid ${assignedKeeper ? T.keeperDim : T.glassBorder}` }}>
+                        <span style={{ ...mono, fontSize: 12, color: T.textMuted, minWidth: 24 }}>H{h + 1}</span>
+                        {assignedKeeper ? (
+                          <span style={{ fontSize: 14, fontWeight: 600, color: T.keeper, flex: 1 }}>{Icons.glove(12, T.keeper)} {assignedKeeper}</span>
+                        ) : (
+                          <span style={{ fontSize: 13, color: T.textMuted, flex: 1, fontStyle: "italic" }}>Nog geen keeper</span>
+                        )}
+                        {assignedKeeper && h > 0 && (
+                          <button onClick={() => {
+                            const q = [...keeperQueue];
+                            q[h] = null;
+                            // Trim trailing nulls
+                            while (q.length > 1 && !q[q.length - 1]) q.pop();
+                            setKeeperQueue(q);
+                          }} style={{ background: "none", border: "none", cursor: "pointer", padding: 2, opacity: 0.5, display: "flex" }}>{Icons.x(12, T.danger)}</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Speler-chips om toe te wijzen */}
+                {(() => {
+                  // Vind eerste lege helft
+                  const emptyIdx = Array.from({ length: halves }, (_, h) => h).find(h => !keeperQueue[h]);
+                  if (emptyIdx == null) return null;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6 }}>Kies keeper voor helft {emptyIdx + 1}:</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {players.filter(p => !keeperQueue.includes(p)).map(p => (
+                          <button key={p} onClick={() => {
+                            const q = [...keeperQueue];
+                            // Pad met nulls tot emptyIdx
+                            while (q.length <= emptyIdx) q.push(null);
+                            q[emptyIdx] = p;
+                            setKeeperQueue(q);
+                          }} style={{ padding: "6px 12px", borderRadius: 8, background: T.glass, border: `1px solid ${T.glassBorder}`, cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans',sans-serif", color: T.text, transition: "all 0.15s" }}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Opstelling preview in tactiek modus */}
         {showFieldView && fieldPlayers.length > 0 && (
