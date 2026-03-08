@@ -80,10 +80,16 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           const cleanName = opponent?.replace(/JM$/, '').trim();
           setAwayTeam(cleanName || opponent);
         }
-        // Logo's opslaan in state zodat ze in de wedstrijd scoreboard verschijnen
+        // Logo's opslaan: homeLogo = Ed's team, awayLogo = tegenstander
+        // Bij uitwedstrijd zijn thuis/uit omgedraaid in de API data
         if (upcoming) {
-          setHomeLogo(upcoming.thuisLogo || null);
-          setAwayLogo(upcoming.uitLogo || null);
+          if (upcoming.isThuiswedstrijd) {
+            setHomeLogo(upcoming.thuisLogo || null);
+            setAwayLogo(upcoming.uitLogo || null);
+          } else {
+            setHomeLogo(upcoming.uitLogo || null);
+            setAwayLogo(upcoming.thuisLogo || null);
+          }
         }
       })
       .catch(() => setSchedule({ loading: false, match: null, error: 'Kon programma niet laden' }));

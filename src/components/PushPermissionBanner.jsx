@@ -125,75 +125,41 @@ export default function PushPermissionBanner({ matchCode, role }) {
 
   const isCoach = role === 'coach';
 
-  // Subscribed state — compact success with test + re-subscribe buttons
+  // Subscribed state — verberg banner, toon alleen eenmalige iOS tip indien nodig
   if (state === 'subscribed') {
+    if (!showIOSTip) return null;
+
     return (
       <div style={{
         ...card,
         padding: '10px 16px',
         margin: '0 0 12px 0',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 18, flexShrink: 0 }}>🔔</span>
-          <div style={{ flex: 1, fontSize: 12, color: T.textDim }}>
-            Meldingen actief
-            {subInfo?.endpoint && (
-              <span style={{ fontSize: 10, opacity: 0.6 }}>
-                {' '}({subInfo.endpoint.includes('apple') ? '🍎 Apple' : '🤖 Google'})
-              </span>
-            )}
+        <div style={{
+          padding: '10px 12px',
+          background: 'rgba(59,130,246,0.08)',
+          borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>
+            Meldingen op je vergrendelscherm
+          </div>
+          <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.5 }}>
+            Om meldingen te zien als je telefoon vergrendeld is:
+          </div>
+          <div style={{ fontSize: 11, color: T.text, lineHeight: 1.6, marginTop: 4 }}>
+            Instellingen → Meldingen → Dilli Wissel → zet <strong>Toegangsscherm</strong> aan
           </div>
           <button
-            onClick={handleDiag}
+            onClick={() => { dismissIOSLockScreenTip(); setShowIOSTip(false); }}
             style={{
-              background: 'none', border: 'none', color: T.textMuted,
-              fontSize: 11, cursor: 'pointer', padding: '4px 4px',
+              marginTop: 8, background: 'none', border: `1px solid ${T.border}`,
+              color: T.text, borderRadius: 8, padding: '5px 14px', fontSize: 12,
+              fontWeight: 600, cursor: 'pointer',
               fontFamily: "'DM Sans',sans-serif",
+              width: '100%',
             }}
-          >ℹ️</button>
+          >Begrepen</button>
         </div>
-        {showIOSTip && (
-          <div style={{
-            marginTop: 8, padding: '10px 12px',
-            background: 'rgba(59,130,246,0.08)',
-            borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)',
-          }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: T.text, marginBottom: 4 }}>
-              Meldingen op je vergrendelscherm
-            </div>
-            <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.5 }}>
-              Om meldingen te zien als je telefoon vergrendeld is:
-            </div>
-            <div style={{ fontSize: 11, color: T.text, lineHeight: 1.6, marginTop: 4 }}>
-              Instellingen → Meldingen → Dilli Wissel → zet <strong>Toegangsscherm</strong> aan
-            </div>
-            <button
-              onClick={() => { dismissIOSLockScreenTip(); setShowIOSTip(false); }}
-              style={{
-                marginTop: 8, background: 'none', border: `1px solid ${T.border}`,
-                color: T.text, borderRadius: 8, padding: '5px 14px', fontSize: 12,
-                fontWeight: 600, cursor: 'pointer',
-                fontFamily: "'DM Sans',sans-serif",
-                width: '100%',
-              }}
-            >Begrepen</button>
-          </div>
-        )}
-        {showDiag && (
-          <div style={{ marginTop: 8 }}>
-            <DiagPanel diag={diag} onRefresh={handleDiag} />
-            <button
-              onClick={handleForceResubscribe}
-              disabled={subscribing}
-              style={{
-                marginTop: 6, background: 'none', border: `1px solid ${T.border}`,
-                color: T.textDim, borderRadius: 8, padding: '4px 10px', fontSize: 11,
-                cursor: 'pointer', fontFamily: "'DM Sans',sans-serif",
-                width: '100%',
-              }}
-            >{subscribing ? '...' : '🔄 Herregistreer push'}</button>
-          </div>
-        )}
       </div>
     );
   }
