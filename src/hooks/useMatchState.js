@@ -178,7 +178,8 @@ export function useMatchState() {
   const [pendingEnd, setPendingEnd] = useState(false); // Wedstrijd wil eindigen, wacht op coach bevestiging
 
   // Tactiek modus state (JO13+ / 11v11)
-  const [matchMode, setMatchMode] = useState("speeltijd"); // "speeltijd" | "tactiek"
+  const [matchMode, setMatchMode] = useState("speeltijd"); // "speeltijd" | "tactiek" (legacy)
+  const [autoSubs, setAutoSubs] = useState(true); // Eerlijke wissels aan/uit (onafhankelijk van veld-view)
   const [formation, setFormation] = useState(null); // "4-3-3" | "custom" | null
   const [playerPositions, setPlayerPositions] = useState({}); // { "Bobby": { x: 50, y: 85 } }
   const [squadNumbers, setSquadNumbers] = useState({}); // { "Bobby": 1 }
@@ -232,12 +233,14 @@ export function useMatchState() {
     subHistory,
     injuryTime,
     isRunning, isPaused, halfBreak,
-    matchMode, formation, playerPositions, squadNumbers,
+    matchMode, autoSubs, formation, playerPositions, squadNumbers,
     // Wisselschema sync (v3.16.0)
     subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
+    // Alert state (voor reconnect restore)
+    showSubAlert, suggestedSubs,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
-  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot]);
+  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -327,6 +330,7 @@ export function useMatchState() {
 
     // Tactiek modus state
     setMatchMode(data.matchMode || "speeltijd");
+    setAutoSubs(data.autoSubs != null ? data.autoSubs : (data.matchMode !== "tactiek"));
     setFormation(data.formation || null);
     setPlayerPositions(data.playerPositions || {});
     setSquadNumbers(data.squadNumbers || {});
@@ -422,12 +426,12 @@ export function useMatchState() {
     setHomeScore(0); setAwayScore(0); setGoalScorers({});
     setEvents([]); // Reset events van vorige wedstrijd
     setPendingEnd(false);
-    // Tactiek: wijs spelers toe aan opstellingsposities
-    if (matchMode === "tactiek" && formation && formation !== "custom") {
+    // Veld-view: wijs spelers toe aan opstellingsposities (bij >= 7 op veld)
+    if (playersOnField >= 7 && formation && formation !== "custom") {
       setPlayerPositions(assignPlayersToFormation(formation, fl, keeper));
     }
-    // Wisselschema: genereer pre-calculated schedule bij start (alleen speeltijd modus)
-    if (matchMode !== "tactiek") {
+    // Wisselschema: genereer pre-calculated schedule bij start (alleen als autoSubs aan)
+    if (autoSubs) {
       const schedule = generateSubSchedule(players, keeper, playersOnField, halfDuration, halves, subInterval);
       setSubSchedule(schedule);
       setActiveSlotIndex(-1);
@@ -555,7 +559,7 @@ export function useMatchState() {
       }
       return;
     }
-    if (matchMode !== "tactiek" && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
+    if (autoSubs && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
       alertShownRef.current = true;
       // Track latency start (coach ziet nu de alert)
       subLatencyRef.current = subTimer - (subInterval * 60);
@@ -683,6 +687,19 @@ export function useMatchState() {
     setOnBench(newBench);
     setExcludedPlayers(newExcluded);
 
+    // Bug Fix: als geen bankspelers meer → sluit alert en leeg schema
+    if (newBench.length === 0) {
+      if (showSubAlert) {
+        setShowSubAlert(false);
+        alertShownRef.current = false;
+      }
+      setSubSchedule(prev => prev.map(s => s.status === 'pending' ? { ...s, status: 'skipped' } : s));
+      setScheduleVersion(v => v + 1);
+      addEvent({ type: 'no_subs_remaining', time: fmt(matchTimer), half: currentHalf });
+      syncToServer();
+      return;
+    }
+
     // Schema herberekenen met nieuwe speler-pool
     setSubSchedule(prev => {
       const recalc = recalculateRemainingSlots(
@@ -731,8 +748,8 @@ export function useMatchState() {
     setOnField(onField.map(p => (p === fp ? bp : p)));
     setOnBench(onBench.map(p => (p === bp ? fp : p)));
     if (wasKeeper) setMatchKeeper(bp);
-    // Tactiek: inkomende speler erft positie van uitgaande
-    if (matchMode === "tactiek") {
+    // Veld-view: inkomende speler erft positie van uitgaande
+    if (playersOnField >= 7) {
       setPlayerPositions(prev => {
         const n = { ...prev };
         if (n[fp]) { n[bp] = { ...n[fp] }; delete n[fp]; }
@@ -756,6 +773,12 @@ export function useMatchState() {
     setMatchKeeper(newKeeper);
     setShowKeeperPicker(false);
     addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
+    // Bug Fix: keeper swap tijdens actieve sub alert → herbereken suggestedSubs
+    if (showSubAlert) {
+      const updatedField = fromBench ? onField.map(p => (p === matchKeeper ? newKeeper : p)) : onField;
+      const updatedBench = fromBench ? onBench.map(p => (p === newKeeper ? matchKeeper : p)) : onBench;
+      setSuggestedSubs(calculateSubs(updatedField, updatedBench, playTime, newKeeper));
+    }
     // Keeper van bank: veld/bank compositie veranderd → schema herberekenen
     if (fromBench) {
       const newField = onField.map(p => (p === matchKeeper ? newKeeper : p));
@@ -828,11 +851,19 @@ export function useMatchState() {
 
       // Tactiek modus state (setup level)
       setMatchMode(data.matchMode || "speeltijd");
+      setAutoSubs(data.autoSubs != null ? data.autoSubs : (data.matchMode !== "tactiek"));
       setFormation(data.formation || null);
       setSquadNumbers(data.squadNumbers || {});
 
       // Live match state + timer via gedeelde functie
       applyServerSnapshot(data);
+
+      // Bug Fix: herstel sub alert na reconnect (pagina refresh)
+      if (data.showSubAlert && data.suggestedSubs) {
+        setShowSubAlert(true);
+        setSuggestedSubs(data.suggestedSubs);
+        alertShownRef.current = true;
+      }
 
       // Status → view
       if (data.status === 'ended') {
@@ -895,8 +926,8 @@ export function useMatchState() {
     showPaste, setShowPaste, clipboardNames, setClipboardNames,
     showClipBanner, setShowClipBanner, clipDismissed, setClipDismissed,
     pasteText, setPasteText, pasteResult, setPasteResult,
-    // Tactiek modus
-    matchMode, setMatchMode, formation, setFormation,
+    // Tactiek modus + autoSubs
+    matchMode, setMatchMode, autoSubs, setAutoSubs, formation, setFormation,
     playerPositions, setPlayerPositions, updatePlayerPosition,
     squadNumbers, setSquadNumbers,
     // Wisselschema (v3.16.0)

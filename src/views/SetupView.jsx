@@ -22,15 +22,15 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     clipDismissed, setClipDismissed, pasteText, setPasteText,
     pasteResult, setPasteResult,
     addPlayer, removePlayer, movePlayer, toggleKeeper,
-    matchMode, formation, setFormation, playerPositions, setPlayerPositions,
+    matchMode, autoSubs, formation, setFormation, playerPositions, setPlayerPositions,
     updatePlayerPosition, squadNumbers,
   } = state;
 
-  const isTactiek = matchMode === "tactiek";
+  const showFieldView = playersOnField >= 7;
 
   // Bereken veldspelers voor FieldView preview
   const fieldPlayers = (() => {
-    if (!isTactiek || players.length === 0) return [];
+    if (!showFieldView || players.length === 0) return [];
     const kp = keeper;
     const others = players.filter(p => p !== kp);
     const onField = kp ? [kp, ...others.slice(0, playersOnField - 1)] : others.slice(0, playersOnField);
@@ -48,7 +48,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
 
   // Initialiseer posities als er nog geen zijn maar wel een formatie
   useEffect(() => {
-    if (!isTactiek || !formation || formation === "custom") return;
+    if (!showFieldView || !formation || formation === "custom") return;
     if (fieldPlayers.length === 0) return;
     // Alleen herberekenen als er spelers zijn zonder positie
     const hasPositions = fieldPlayers.some(p => playerPositions[p]);
@@ -56,7 +56,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
       const positions = assignPlayersToFormation(formation, fieldPlayers, keeper);
       setPlayerPositions(positions);
     }
-  }, [isTactiek, formation, players.length, keeper]);
+  }, [showFieldView, formation, players.length, keeper]);
 
   // Schedule: volgende wedstrijd ophalen
   const [schedule, setSchedule] = useState({ loading: false, match: null, error: null });
@@ -184,11 +184,16 @@ export default function SetupView({ state, onStartMatch, onBack }) {
           })()}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            <Stepper label="In veld" value={playersOnField} set={isTactiek ? undefined : setPlayersOnField} min={3} step={1} />
+            <Stepper label="In veld" value={playersOnField} set={setPlayersOnField} min={3} step={1} />
             <Stepper label="Helften" value={halves} set={setHalves} min={1} step={1} />
             <Stepper label="Min / helft" value={halfDuration} set={setHalfDuration} min={5} step={5} />
-            {!isTactiek && <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />}
+            {autoSubs && <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />}
           </div>
+          {autoSubs && subInterval >= halfDuration && (
+            <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: T.dangerDim, fontSize: 12, color: T.danger, fontWeight: 600 }}>
+              ⚠️ Wisselinterval ({subInterval} min) ≥ helftduur ({halfDuration} min) — geen wissels mogelijk!
+            </div>
+          )}
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Tegenstander</div>
             <input type="text" value={awayTeam} onChange={e => setAwayTeam(e.target.value)} placeholder="Tegenstander" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
@@ -274,7 +279,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
         </div>
 
         {/* Opstelling preview in tactiek modus */}
-        {isTactiek && fieldPlayers.length > 0 && (
+        {showFieldView && fieldPlayers.length > 0 && (
           <div style={{ ...card, padding: 20, marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.textDim, marginBottom: 12, textTransform: "uppercase", letterSpacing: 1 }}>Opstelling</div>
             <FormationPicker value={formation} onChange={handleFormationChange} />

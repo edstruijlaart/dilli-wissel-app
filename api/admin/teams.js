@@ -8,11 +8,37 @@ function checkAdmin(req) {
   return adminCode && auth.trim() === adminCode.trim();
 }
 
+// Migreer bestaande teams: mode → autoSubs boolean
+function migrateTeamSettings(team) {
+  if (!team.settings) return team;
+  const s = team.settings;
+  // Al gemigreerd
+  if (s.autoSubs !== undefined) return team;
+  // Migratie: speeltijd → autoSubs=true, tactiek → autoSubs=false
+  if (s.mode === 'tactiek') {
+    s.autoSubs = false;
+  } else {
+    s.autoSubs = true;
+  }
+  return team;
+}
+
 // Haal teams op uit Redis, seed vanuit env var als Redis leeg is
 async function getTeams() {
   let teams = await redis.get(TEAMS_KEY);
   if (teams) {
-    return typeof teams === 'string' ? JSON.parse(teams) : teams;
+    teams = typeof teams === 'string' ? JSON.parse(teams) : teams;
+    // Migreer alle teams bij ophalen
+    let migrated = false;
+    for (const code of Object.keys(teams)) {
+      if (teams[code].settings && teams[code].settings.autoSubs === undefined) {
+        teams[code] = migrateTeamSettings(teams[code]);
+        migrated = true;
+      }
+    }
+    // Sla gemigreerde data op (eenmalig)
+    if (migrated) await redis.set(TEAMS_KEY, JSON.stringify(teams));
+    return teams;
   }
   // Seed vanuit COACH_TEAMS env var (eenmalig)
   const teamsEnv = process.env.COACH_TEAMS;
@@ -77,6 +103,7 @@ export default async function handler(req, res) {
           ...(settings.halfDuration != null && { halfDuration: Number(settings.halfDuration) }),
           ...(settings.halves != null && { halves: Number(settings.halves) }),
           ...(settings.subInterval != null && { subInterval: Number(settings.subInterval) }),
+          ...(settings.autoSubs != null && { autoSubs: Boolean(settings.autoSubs) }),
           ...(settings.mode && { mode: settings.mode }),
           ...(settings.defaultFormation && { defaultFormation: settings.defaultFormation }),
         };

@@ -111,7 +111,9 @@ export default function App() {
       if (s.halfDuration) state.setHalfDuration(s.halfDuration);
       if (s.halves) state.setHalves(s.halves);
       if (s.subInterval) state.setSubInterval(s.subInterval);
-      // Tactiek modus
+      // AutoSubs (nieuw) + legacy mode
+      if (s.autoSubs != null) state.setAutoSubs(s.autoSubs);
+      else if (s.mode) state.setAutoSubs(s.mode !== 'tactiek');
       if (s.mode) state.setMatchMode(s.mode);
       if (s.defaultFormation) state.setFormation(s.defaultFormation);
     }

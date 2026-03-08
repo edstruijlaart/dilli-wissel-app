@@ -391,11 +391,11 @@ function TeamsManager({ teams, setTeams, headers }) {
 
               {config.settings && Object.keys(config.settings).length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                  {config.settings.mode === "tactiek" && <span style={{ fontSize: 11, color: "#fff", background: T.accent, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}>Tactiek</span>}
+                  {config.settings.autoSubs !== false && <span style={{ fontSize: 11, color: "#fff", background: T.accent, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}>Eerlijke wissels</span>}
                   {config.settings.defaultFormation && <span style={{ fontSize: 11, color: T.accent, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6, fontWeight: 600 }}>{config.settings.defaultFormation}</span>}
                   {config.settings.playersOnField && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.playersOnField} in veld</span>}
                   {config.settings.halves && config.settings.halfDuration && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>{config.settings.halves}×{config.settings.halfDuration}min</span>}
-                  {config.settings.mode !== "tactiek" && config.settings.subInterval && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>wissel {config.settings.subInterval}min</span>}
+                  {config.settings.autoSubs !== false && config.settings.subInterval && <span style={{ fontSize: 11, color: T.textDim, background: `${T.accent}10`, padding: "3px 8px", borderRadius: 6 }}>wissel {config.settings.subInterval}min</span>}
                 </div>
               )}
 
@@ -448,15 +448,17 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
   const [halves, setHalves] = useState(initialSettings.halves || '');
   const [subInterval, setSubInterval] = useState(initialSettings.subInterval || '');
 
-  // Tactiek modus velden
-  const [matchMode, setMatchMode] = useState(initialSettings.mode || 'speeltijd');
+  // Eerlijke wissels toggle + formatie velden
+  const [autoSubs, setAutoSubs] = useState(
+    initialSettings.autoSubs != null ? initialSettings.autoSubs :
+    initialSettings.mode === 'tactiek' ? false : true
+  );
   const [defaultFormation, setDefaultFormation] = useState(initialSettings.defaultFormation || '');
   const [squadNumbers, setSquadNumbers] = useState(initialSquadNumbers);
 
-  const isTactiek = matchMode === 'tactiek';
-
   // Parsed players (voor rugnummer inputs)
   const parsedPlayers = playerText.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
+  const showFieldOptions = parsedPlayers.length >= 7;
 
   const handleSave = () => {
     if (!code.trim()) return setError('Code is verplicht');
@@ -479,19 +481,21 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
 
     // Settings: alleen meesturen als ingevuld
     const settings = {};
-    const pof = isTactiek ? 11 : playersOnField;
-    if (pof !== '' && !isNaN(pof)) settings.playersOnField = Number(pof);
+    settings.autoSubs = autoSubs;
+    if (playersOnField !== '' && !isNaN(playersOnField)) settings.playersOnField = Number(playersOnField);
     if (halfDuration !== '' && !isNaN(halfDuration)) settings.halfDuration = Number(halfDuration);
     if (halves !== '' && !isNaN(halves)) settings.halves = Number(halves);
-    if (!isTactiek && subInterval !== '' && !isNaN(subInterval)) settings.subInterval = Number(subInterval);
-    // Tactiek-specifieke settings
-    if (isTactiek) {
-      settings.mode = 'tactiek';
-      if (defaultFormation) settings.defaultFormation = defaultFormation;
+    if (subInterval !== '' && !isNaN(subInterval)) settings.subInterval = Number(subInterval);
+    // Formatie (alleen relevant bij >= 7 spelers)
+    if (showFieldOptions && defaultFormation) settings.defaultFormation = defaultFormation;
+
+    // Validatie: subInterval moet korter zijn dan halfDuration
+    if (settings.subInterval && settings.halfDuration && settings.subInterval >= settings.halfDuration) {
+      return setError('Wisselinterval moet korter zijn dan de helftduur');
     }
 
-    // Rugnummers: alleen niet-lege opslaan
-    const sqNums = isTactiek ? Object.fromEntries(
+    // Rugnummers: alleen niet-lege opslaan (bij >= 7 spelers)
+    const sqNums = showFieldOptions ? Object.fromEntries(
       Object.entries(squadNumbers).filter(([, v]) => v !== '' && v != null)
     ) : undefined;
 
@@ -579,36 +583,31 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
         )}
       </div>
 
-      {/* Modus toggle */}
+      {/* Eerlijke wissels toggle */}
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, display: "block" }}>
-          Modus
+          Eerlijke wissels
         </label>
-        <div style={{ display: "flex", gap: 6 }}>
-          {[['speeltijd', 'Speeltijd'], ['tactiek', 'Tactiek']].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setMatchMode(key)}
-              style={{
-                padding: "8px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                fontFamily: "'DM Sans',sans-serif", cursor: "pointer", transition: "all 0.15s",
-                border: matchMode === key ? `2px solid ${T.accent}` : `1px solid ${T.glassBorder}`,
-                background: matchMode === key ? `${T.accent}12` : T.glass,
-                color: matchMode === key ? T.accent : T.textDim,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => setAutoSubs(!autoSubs)}
+          style={{
+            padding: "8px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+            fontFamily: "'DM Sans',sans-serif", cursor: "pointer", transition: "all 0.15s",
+            border: `2px solid ${autoSubs ? T.accent : T.glassBorder}`,
+            background: autoSubs ? `${T.accent}12` : T.glass,
+            color: autoSubs ? T.accent : T.textDim,
+          }}
+        >
+          {autoSubs ? '✓ Aan' : 'Uit'}
+        </button>
         <p style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>
-          {isTactiek ? 'Tactiek: opstellingen, posities, rugnummers. Geen auto-wissels.' : 'Speeltijd: eerlijke verdeling, automatische wisselsuggesties.'}
+          {autoSubs ? 'Eerlijke speeltijdverdeling met automatische wisselsuggesties.' : 'Handmatig wisselen. Geen automatische suggesties.'}
         </p>
       </div>
 
-      {/* Default formatie (alleen bij tactiek) */}
-      {isTactiek && (
+      {/* Default formatie (bij >= 7 spelers) */}
+      {showFieldOptions && (
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "block" }}>
             Standaard formatie
@@ -627,8 +626,8 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
         </div>
       )}
 
-      {/* Rugnummers (alleen bij tactiek en als er spelers zijn) */}
-      {isTactiek && parsedPlayers.length > 0 && (
+      {/* Rugnummers (bij >= 7 spelers) */}
+      {showFieldOptions && (
         <div style={{ marginBottom: 12 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, display: "block" }}>
             Rugnummers <span style={{ fontWeight: 400, textTransform: "none" }}>(optioneel)</span>
@@ -658,18 +657,10 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
           Standaard instellingen <span style={{ fontWeight: 400, textTransform: "none" }}>(optioneel)</span>
         </label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {!isTactiek && (
-            <div>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
-              <input type="number" value={playersOnField} onChange={e => setPlayersOnField(e.target.value)} placeholder="—" min={3} style={numInputStyle} />
-            </div>
-          )}
-          {isTactiek && (
-            <div>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
-              <input type="number" value={11} disabled style={{ ...numInputStyle, background: "#f0f0f0", color: T.textMuted }} />
-            </div>
-          )}
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>In veld</div>
+            <input type="number" value={playersOnField} onChange={e => setPlayersOnField(e.target.value)} placeholder="—" min={3} style={numInputStyle} />
+          </div>
           <div>
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Helften</div>
             <input type="number" value={halves} onChange={e => setHalves(e.target.value)} placeholder="—" min={1} style={numInputStyle} />
@@ -678,18 +669,19 @@ function TeamForm({ initialCode = '', initialTeam = '', initialPlayers = [], ini
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Min / helft</div>
             <input type="number" value={halfDuration} onChange={e => setHalfDuration(e.target.value)} placeholder="—" min={5} style={numInputStyle} />
           </div>
-          {!isTactiek && (
-            <div>
-              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Wissel elke (min)</div>
-              <input type="number" value={subInterval} onChange={e => setSubInterval(e.target.value)} placeholder="—" min={2} style={numInputStyle} />
-            </div>
-          )}
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>Wissel elke (min)</div>
+            <input type="number" value={subInterval} onChange={e => setSubInterval(e.target.value)} placeholder="—" min={2} style={numInputStyle} />
+          </div>
         </div>
         <p style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>
-          {isTactiek
-            ? 'In veld staat vast op 11 in tactiek modus. Leeg = app standaard.'
-            : 'Leeg = app standaard. Ingevuld = automatisch vooringesteld bij wedstrijdstart.'}
+          Leeg = app standaard. Ingevuld = automatisch vooringesteld bij wedstrijdstart.
         </p>
+        {subInterval && halfDuration && Number(subInterval) >= Number(halfDuration) && (
+          <p style={{ fontSize: 11, color: T.danger, marginTop: 4, fontWeight: 600 }}>
+            ⚠ Wisselinterval ({subInterval}min) moet korter zijn dan helftduur ({halfDuration}min)
+          </p>
+        )}
       </div>
 
       {error && <p style={{ fontSize: 12, color: T.danger, marginBottom: 8 }}>{error}</p>}

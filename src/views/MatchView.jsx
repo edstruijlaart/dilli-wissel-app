@@ -25,11 +25,11 @@ export default function MatchView({ state }) {
     executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
     viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
-    matchMode, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
+    matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
     subSchedule, activeSlotIndex, subsPerSlot,
   } = state;
 
-  const isTactiek = matchMode === "tactiek";
+  const showFieldView = playersOnField >= 7;
 
   const [scorerPicker, setScorerPicker] = useState(null); // 'home' | 'away' | null
   const [showEndHalfConfirm, setShowEndHalfConfirm] = useState(false);
@@ -158,7 +158,7 @@ export default function MatchView({ state }) {
         )}
         {/* Timer */}
         <div style={{ ...card, padding: 20, marginBottom: 10, position: "relative", overflow: "hidden" }}>
-          {!isTactiek && urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
+          {autoSubs && urgent && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,transparent,${T.warn},transparent)`, animation: "pulse 1.5s ease infinite" }} />}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1 }}>Helft</div>
@@ -178,10 +178,10 @@ export default function MatchView({ state }) {
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
             <span style={{ color: T.textMuted }}>Rest: {fmt(Math.max(0, hr))}</span>
-            {!isTactiek && onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
+            {autoSubs && onBench.length > 0 && <span style={{ ...mono, color: urgent ? T.warn : T.textMuted, fontWeight: urgent ? 700 : 500 }}>Wissel: {fmt(Math.max(0, sr))}</span>}
           </div>
           {/* Volgende wissel preview: toon wie eruit/erin gaat als wissel < 2 min */}
-          {!isTactiek && isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
+          {autoSubs && isRunning && !showSubAlert && !halfBreak && onBench.length > 0 && sr <= 120 && (() => {
             const { out: nextOut, inn: nextIn } = calculateSubs(onField, onBench, playTime, matchKeeper);
             if (nextOut.length === 0) return null;
             return (
@@ -311,7 +311,7 @@ export default function MatchView({ state }) {
         )}
 
         {/* Sub alert - full screen overlay (alleen in speeltijd modus) */}
-        {!isTactiek && showSubAlert && !halfBreak && (
+        {autoSubs && showSubAlert && !halfBreak && (
           <div style={{
             position: "fixed", inset: 0, zIndex: 1100,
             background: subAlertUrgent ? "rgba(220,38,38,0.15)" : "rgba(217,119,6,0.08)",
@@ -344,17 +344,17 @@ export default function MatchView({ state }) {
                       <select value={p} onChange={e => editSubProposal(i, 'out', e.target.value)} style={{
                         flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
                         background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                        color: T.text, minWidth: 0,
+                        color: T.text, minWidth: 0, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
-                        {outOptions.map(op => <option key={op} value={op}>{op} ({fmt(playTime[op] || 0)})</option>)}
+                        {outOptions.map(op => <option key={op} value={op}>{op.length > 14 ? op.slice(0, 13) + '…' : op} ({fmt(playTime[op] || 0)})</option>)}
                       </select>
                       <span style={{ color: T.textMuted, fontSize: 16, flexShrink: 0 }}>→</span>
                       <select value={suggestedSubs.inn[i]} onChange={e => editSubProposal(i, 'inn', e.target.value)} style={{
                         flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
                         background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                        color: T.text, minWidth: 0,
+                        color: T.text, minWidth: 0, maxWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
-                        {innOptions.map(op => <option key={op} value={op}>{op} ({fmt(playTime[op] || 0)})</option>)}
+                        {innOptions.map(op => <option key={op} value={op}>{op.length > 14 ? op.slice(0, 13) + '…' : op} ({fmt(playTime[op] || 0)})</option>)}
                       </select>
                       <span style={{ color: T.accent, flexShrink: 0 }}>{Icons.arrowUp(14)}</span>
                     </div>
@@ -379,7 +379,7 @@ export default function MatchView({ state }) {
         )}
 
         {/* Field */}
-        {isTactiek ? (
+        {showFieldView ? (
           <div style={{ ...card, padding: 16, marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 8, height: 8, borderRadius: 4, background: T.accent }} />
@@ -479,7 +479,7 @@ export default function MatchView({ state }) {
         )}
 
         {/* Wisselschema preview */}
-        {!isTactiek && subSchedule.length > 0 && (
+        {autoSubs && subSchedule.length > 0 && (
           <div style={{ ...card, padding: 0, marginBottom: 10, overflow: "hidden" }}>
             <button onClick={() => setShowSchedule(s => !s)} style={{
               width: "100%", padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
@@ -588,7 +588,7 @@ export default function MatchView({ state }) {
             )}
 
             {/* Blessure knop */}
-            {!isTactiek && players.length > 1 && (
+            {players.length > 1 && (
               <button onClick={() => setShowInjuryPicker(true)} style={{
                 ...btnS, width: "100%", padding: "10px 0", fontSize: 13,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
