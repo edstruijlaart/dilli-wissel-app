@@ -337,11 +337,6 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
         {/* iOS install prompt — push werkt alleen als PWA op homescreen */}
         {isIOS() && !isInstalledPWA() && !isPushSupported() && (
           <div
-            onClick={() => {
-              if (navigator.share) {
-                navigator.share({ url: window.location.href }).catch(() => {});
-              }
-            }}
             style={{
               ...card,
               padding: 16,
@@ -352,7 +347,6 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
               borderColor: T.accent,
               borderWidth: 1,
               borderStyle: 'solid',
-              cursor: 'pointer',
             }}>
             <span style={{ fontSize: 24, flexShrink: 0 }}>📲</span>
             <div>
@@ -360,7 +354,7 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
                 Installeer de app
               </p>
               <p style={{ fontSize: 12, color: T.textDim, lineHeight: 1.4 }}>
-                Tik hier om het deelmenu te openen en kies <strong>Zet op beginscherm</strong> voor meldingen bij goals en wissels.
+                Tik op het deel-icoon <span style={{ fontSize: 16, verticalAlign: 'middle' }}>⬆️</span> onderaan in Safari en kies <strong>Zet op beginscherm</strong> voor meldingen bij goals en wissels.
               </p>
             </div>
           </div>
