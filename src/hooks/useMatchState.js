@@ -53,8 +53,10 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
 
   for (let half = 1; half <= nHalves; half++) {
     const slotTimes = [];
+    const MIN_BEFORE_END = 120; // 2 minuten voor einde helft niet meer wisselen
     for (let s = 1; s <= slotsPerHalf; s++) {
-      slotTimes.push(s * I);
+      const t = s * I;
+      if (t <= D - MIN_BEFORE_END) slotTimes.push(t);
     }
 
     let prevSlotTime = 0;
@@ -559,7 +561,9 @@ export function useMatchState() {
       }
       return;
     }
-    if (autoSubs && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
+    // Geen wisseladvies in laatste 2 minuten van helft
+    const remainingInHalf = hs - he;
+    if (autoSubs && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0 && remainingInHalf >= 120) {
       alertShownRef.current = true;
       // Track latency start (coach ziet nu de alert)
       subLatencyRef.current = subTimer - (subInterval * 60);
