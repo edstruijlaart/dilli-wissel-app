@@ -5,7 +5,7 @@ import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
 export default function SummaryView({ state, onNewMatch }) {
-  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore, matchCode } = state;
+  const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeScore, awayScore, matchCode, subSchedule, excludedPlayers } = state;
   const [goalEvents, setGoalEvents] = useState([]);
 
   // Haal doelpunten op van server voor share-functie
@@ -117,6 +117,39 @@ export default function SummaryView({ state, onNewMatch }) {
             })()}
           </div>
         )}
+        {subSchedule && subSchedule.length > 0 && (() => {
+          const executed = subSchedule.filter(s => s.status === 'executed').length;
+          const skipped = subSchedule.filter(s => s.status === 'skipped').length;
+          const total = subSchedule.length;
+          const pct = total > 0 ? Math.round((executed / total) * 100) : 0;
+          return (
+            <div className="sum-row" style={{ ...card, padding: 20, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                {Icons.swap(16, T.textDim)}
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>Wisselschema</span>
+              </div>
+              <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, background: `${T.accent}15`, textAlign: "center" }}>
+                  <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: T.accent }}>{executed}</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>uitgevoerd</div>
+                </div>
+                <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, background: skipped > 0 ? T.dangerDim : T.glass, textAlign: "center" }}>
+                  <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: skipped > 0 ? T.danger : T.textMuted }}>{skipped}</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>overgeslagen</div>
+                </div>
+                <div style={{ flex: 1, padding: "10px 12px", borderRadius: 10, background: T.glass, textAlign: "center" }}>
+                  <div style={{ ...mono, fontSize: 20, fontWeight: 700, color: pct >= 80 ? T.accent : pct >= 50 ? T.warn : T.danger }}>{pct}%</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>adherence</div>
+                </div>
+              </div>
+              {excludedPlayers && excludedPlayers.length > 0 && (
+                <div style={{ padding: "8px 12px", borderRadius: 8, background: T.dangerDim, fontSize: 12, color: T.danger, fontWeight: 600 }}>
+                  🏥 Uitgevallen: {excludedPlayers.join(', ')}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         <button onClick={() => shareCoachResult({ homeTeam, awayTeam, homeScore, awayScore }, goalEvents)} style={{
           width: "100%", padding: "14px 24px", marginBottom: 10,
           background: "linear-gradient(135deg, #25D366, #128C7E)",

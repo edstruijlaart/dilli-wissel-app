@@ -22,10 +22,11 @@ export default function MatchView({ state }) {
     showKeeperPicker, setShowKeeperPicker,
     homeTeam, awayTeam, homeScore, awayScore, goalScorers,
     onField, onBench, playTime, setView, setIsRunning,
-    executeSubs, skipSubs, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
+    executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
     viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
     matchMode, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
+    subSchedule, activeSlotIndex, subsPerSlot,
   } = state;
 
   const isTactiek = matchMode === "tactiek";
@@ -41,6 +42,8 @@ export default function MatchView({ state }) {
   const wakeLockRef = useRef(null);
   const subAlertTimeRef = useRef(null);
   const [subAlertUrgent, setSubAlertUrgent] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [showInjuryPicker, setShowInjuryPicker] = useState(false);
 
   // Wedstrijd einde: toon opslaan-dialoog wanneer pendingEnd waar wordt
   useEffect(() => {
@@ -330,18 +333,43 @@ export default function MatchView({ state }) {
                 <p style={{ fontSize: 13, color: T.textMuted, marginTop: 6 }}>Klok loopt door</p>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-                {suggestedSubs.out.map((p, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 12, background: T.glass, border: `1px solid ${T.glassBorder}` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {Icons.arrowDown(14)} <span style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{p}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
+                {suggestedSubs.out.map((p, i) => {
+                  const otherOut = suggestedSubs.out.filter((_, j) => j !== i);
+                  const otherInn = suggestedSubs.inn.filter((_, j) => j !== i);
+                  const outOptions = onField.filter(fp => fp !== matchKeeper && !otherOut.includes(fp));
+                  const innOptions = onBench.filter(bp => !otherInn.includes(bp));
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 12px", borderRadius: 12, background: T.glass, border: `1px solid ${T.glassBorder}` }}>
+                      <span style={{ color: T.danger, flexShrink: 0 }}>{Icons.arrowDown(14)}</span>
+                      <select value={p} onChange={e => editSubProposal(i, 'out', e.target.value)} style={{
+                        flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
+                        background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                        color: T.text, minWidth: 0,
+                      }}>
+                        {outOptions.map(op => <option key={op} value={op}>{op} ({fmt(playTime[op] || 0)})</option>)}
+                      </select>
+                      <span style={{ color: T.textMuted, fontSize: 16, flexShrink: 0 }}>→</span>
+                      <select value={suggestedSubs.inn[i]} onChange={e => editSubProposal(i, 'inn', e.target.value)} style={{
+                        flex: 1, padding: "8px 6px", borderRadius: 8, border: `1px solid ${T.glassBorder}`,
+                        background: T.card, fontSize: 14, fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                        color: T.text, minWidth: 0,
+                      }}>
+                        {innOptions.map(op => <option key={op} value={op}>{op} ({fmt(playTime[op] || 0)})</option>)}
+                      </select>
+                      <span style={{ color: T.accent, flexShrink: 0 }}>{Icons.arrowUp(14)}</span>
                     </div>
-                    <span style={{ color: T.textMuted, fontSize: 18 }}>→</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 700, fontSize: 15 }}>{suggestedSubs.inn[i]}</span> <span style={{ ...mono, fontSize: 11, color: T.textMuted }}>{fmt(playTime[suggestedSubs.inn[i]] || 0)}</span> {Icons.arrowUp(14)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+                <p style={{ fontSize: 11, color: T.textMuted, textAlign: "center", margin: 0 }}>Tik op naam om te wijzigen</p>
               </div>
+              {(() => {
+                const skippedCount = subSchedule.filter(s => s.status === 'skipped').length;
+                return skippedCount >= 2 ? (
+                  <div style={{ padding: "8px 12px", borderRadius: 8, background: T.dangerDim, marginBottom: 12, fontSize: 12, color: T.danger, fontWeight: 600, textAlign: "center" }}>
+                    ⚠️ Al {skippedCount}x overgeslagen — speeltijd wordt ongelijk!
+                  </div>
+                ) : null;
+              })()}
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={executeSubs} style={{ ...btnP, flex: 1, padding: "16px 0", fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}>{Icons.check(18, "#FFFFFF")} Wissel!</button>
                 <button onClick={skipSubs} style={{ ...btnS, padding: "16px 20px", fontSize: 14 }}>Sla over</button>
@@ -450,6 +478,49 @@ export default function MatchView({ state }) {
           </div>
         )}
 
+        {/* Wisselschema preview */}
+        {!isTactiek && subSchedule.length > 0 && (
+          <div style={{ ...card, padding: 0, marginBottom: 10, overflow: "hidden" }}>
+            <button onClick={() => setShowSchedule(s => !s)} style={{
+              width: "100%", padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {Icons.swap(14, T.textDim)}
+                <span style={{ fontSize: 13, fontWeight: 600, color: T.textDim, textTransform: "uppercase", letterSpacing: 1 }}>
+                  Schema ({subSchedule.filter(s => s.status === 'executed').length}/{subSchedule.length})
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: T.textMuted, transform: showSchedule ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+            </button>
+            {showSchedule && (
+              <div style={{ padding: "0 16px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+                {subSchedule.map((slot, i) => {
+                  const isActive = i === activeSlotIndex;
+                  const icon = slot.status === 'executed' ? '✅' : slot.status === 'skipped' ? '⏭️' : isActive ? '🔄' : '⏳';
+                  const dim = slot.status === 'executed' || slot.status === 'skipped';
+                  return (
+                    <div key={slot.id} style={{
+                      display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 8,
+                      background: isActive ? `${T.warn}15` : T.glass,
+                      border: isActive ? `1px solid ${T.warn}40` : `1px solid ${T.glassBorder}`,
+                      opacity: dim ? 0.5 : 1, fontSize: 12,
+                    }}>
+                      <span style={{ flexShrink: 0 }}>{icon}</span>
+                      <span style={{ ...mono, color: T.textMuted, minWidth: 28 }}>H{slot.half}</span>
+                      <span style={{ ...mono, color: T.textMuted, minWidth: 36 }}>{fmt(slot.time)}</span>
+                      <span style={{ color: T.danger, fontWeight: 600 }}>{(slot.out || []).join(', ')}</span>
+                      <span style={{ color: T.textMuted }}>→</span>
+                      <span style={{ color: T.accent, fontWeight: 600 }}>{(slot.inn || []).join(', ')}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Updates (Audio + Foto) - Coach view */}
         {isOnline && matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} key={audioRefresh} />}
 
@@ -515,6 +586,24 @@ export default function MatchView({ state }) {
                 </div>
               </div>
             )}
+
+            {/* Blessure knop */}
+            {!isTactiek && players.length > 1 && (
+              <button onClick={() => setShowInjuryPicker(true)} style={{
+                ...btnS, width: "100%", padding: "10px 0", fontSize: 13,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                color: T.danger, borderColor: T.dangerDim,
+              }}>
+                🏥 Blessure / Uitsluiting
+              </button>
+            )}
+
+            {/* Uitgesloten spelers */}
+            {state.excludedPlayers?.length > 0 && (
+              <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 10, background: T.dangerDim, fontSize: 12, color: T.danger, fontWeight: 600 }}>
+                🚫 Uit wedstrijd: {state.excludedPlayers.join(', ')}
+              </div>
+            )}
           </div>
         )}
 
@@ -568,6 +657,38 @@ export default function MatchView({ state }) {
                   Ja, stop
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Injury picker */}
+        {showInjuryPicker && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowInjuryPicker(false); }}>
+            <div style={{ background: T.card, border: `1px solid ${T.cardBorder}`, borderRadius: 20, padding: 24, width: "100%", maxWidth: 380, animation: "slideIn .25s", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "80vh", overflow: "auto" }}>
+              <div style={{ textAlign: "center", marginBottom: 16 }}>
+                <div style={{ fontSize: 32, marginBottom: 4 }}>🏥</div>
+                <h3 style={{ color: T.danger, fontSize: 18, fontWeight: 700, margin: 0 }}>Speler geblesseerd / uitgesloten</h3>
+                <p style={{ fontSize: 13, color: T.textMuted, marginTop: 6 }}>Speler wordt uit wedstrijd gehaald</p>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+                {[...onField, ...onBench].filter(p => p !== matchKeeper).map(p => (
+                  <button key={p} onClick={() => { excludePlayer(p); setShowInjuryPicker(false); }} style={{
+                    padding: "12px 14px", borderRadius: 10, border: `1px solid ${T.glassBorder}`,
+                    background: T.glass, cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{p}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ ...mono, fontSize: 12, color: T.textMuted }}>{fmt(playTime[p] || 0)}</span>
+                      <span style={{ fontSize: 11, color: onField.includes(p) ? T.accent : T.warn, fontWeight: 600 }}>
+                        {onField.includes(p) ? 'veld' : 'bank'}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setShowInjuryPicker(false)} style={{ ...btnS, width: "100%", padding: "12px 0", fontSize: 14 }}>Annuleer</button>
             </div>
           </div>
         )}

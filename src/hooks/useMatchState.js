@@ -5,6 +5,139 @@ import { assignPlayersToFormation } from '../data/formations';
 
 export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
 
+// --- Pre-calculated substitution schedule (v3.16.0) ---
+
+/**
+ * Genereer een volledig wisselschema over alle helften.
+ * Pure functie — geen React state dependency.
+ *
+ * @param {string[]} playerList - Alle spelers (incl. keeper)
+ * @param {string} keeperName - Naam van de keeper
+ * @param {number} numOnField - Aantal spelers op het veld (incl. keeper)
+ * @param {number} hDuration - Helftduur in minuten
+ * @param {number} nHalves - Aantal helften
+ * @param {number} sInterval - Wisselinterval in minuten
+ * @param {Object} currentPlayTime - Huidige speeltijd per speler (voor herberekening)
+ * @param {string[]} excludedList - Uitgesloten spelers (blessure/rood)
+ * @param {string[]|null} initialField - Huidige veldspelers (voor herberekening)
+ * @param {string[]|null} initialBench - Huidige bankspelers (voor herberekening)
+ * @returns {Array} schedule - Array van wisselslots
+ */
+function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHalves, sInterval, currentPlayTime = {}, excludedList = [], initialField = null, initialBench = null) {
+  const outfield = playerList.filter(p => p !== keeperName && !excludedList.includes(p));
+  const F = numOnField;
+  const B = outfield.length - (F - 1); // bench size (F includes keeper)
+  const D = hDuration * 60;
+  const I = sInterval * 60;
+
+  if (B <= 0 || I <= 0) return [];
+
+  const slotsPerHalf = Math.max(1, Math.floor(D / I) - 1);
+  const fieldSlots = F - 1; // veldplekken excl. keeper
+  const perSlot = Math.max(1, Math.min(B, Math.min(fieldSlots, Math.round(B * I / D))));
+
+  // Gebruik meegegeven field/bench of bereken initieel
+  let field = initialField ? [...initialField] : [keeperName, ...outfield.slice(0, F - 1)];
+  let bench = initialBench ? [...initialBench] : outfield.slice(F - 1);
+
+  // Filter uitgesloten spelers
+  field = field.filter(p => !excludedList.includes(p));
+  bench = bench.filter(p => !excludedList.includes(p));
+
+  // Track geplande speeltijd per outfield speler
+  const projected = {};
+  outfield.forEach(p => { projected[p] = currentPlayTime[p] || 0; });
+
+  const schedule = [];
+  let slotId = 0;
+
+  for (let half = 1; half <= nHalves; half++) {
+    const slotTimes = [];
+    for (let s = 1; s <= slotsPerHalf; s++) {
+      slotTimes.push(s * I);
+    }
+
+    let prevSlotTime = 0;
+    for (const slotTime of slotTimes) {
+      // Update projected speeltijd voor veldspelers
+      const delta = slotTime - prevSlotTime;
+      field.filter(p => p !== keeperName).forEach(p => {
+        projected[p] = (projected[p] || 0) + delta;
+      });
+
+      // Wie eruit: veldspelers (excl. keeper) met MEESTE projected speeltijd
+      const eligible = field.filter(p => p !== keeperName);
+      eligible.sort((a, b) => (projected[b] || 0) - (projected[a] || 0));
+      const goingOut = eligible.slice(0, perSlot);
+
+      // Wie erin: bankspelers met MINSTE projected speeltijd
+      const benchSorted = [...bench].sort((a, b) => (projected[a] || 0) - (projected[b] || 0));
+      const goingIn = benchSorted.slice(0, perSlot);
+
+      if (goingOut.length > 0 && goingIn.length > 0) {
+        schedule.push({
+          id: `slot-${++slotId}`,
+          half,
+          time: slotTime,
+          absoluteTime: (half - 1) * D + slotTime,
+          out: [...goingOut],
+          inn: [...goingIn],
+          status: 'pending',
+          executedAt: null,
+        });
+
+        // Pas field/bench aan voor volgende slot
+        field = field.filter(p => !goingOut.includes(p)).concat(goingIn);
+        bench = bench.filter(p => !goingIn.includes(p)).concat(goingOut);
+      }
+
+      prevSlotTime = slotTime;
+    }
+
+    // Einde helft: resterende speeltijd optellen
+    if (slotTimes.length > 0) {
+      const remaining = D - slotTimes[slotTimes.length - 1];
+      field.filter(p => p !== keeperName).forEach(p => {
+        projected[p] = (projected[p] || 0) + remaining;
+      });
+    }
+  }
+
+  return schedule;
+}
+
+/**
+ * Herbereken resterende wisselslots na skip/injury/edit.
+ * Behoudt alle executed/skipped slots, herberekent pending slots.
+ */
+function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBench, currentPlayTime, keeperName, hDuration, nHalves, sInterval, excluded) {
+  // Behoud alle slots t/m fromIndex (executed/skipped)
+  const fixed = schedule.filter((s, i) => i <= fromIndex);
+
+  // Alle actieve spelers = field + bench (keeper zit al in field)
+  const allPlayers = [...currentField, ...currentBench];
+
+  // Genereer nieuw schema met actuele speeltijden en veld/bank bezetting
+  const remaining = generateSubSchedule(
+    allPlayers, keeperName, currentField.length,
+    hDuration, nHalves, sInterval,
+    currentPlayTime, excluded,
+    currentField, currentBench
+  );
+
+  // Filter: alleen slots die NA het huidige absolute moment vallen
+  const currentAbsTime = schedule[fromIndex]?.absoluteTime || 0;
+  const futureSlots = remaining.filter(s => s.absoluteTime > currentAbsTime);
+
+  // Merge: fixed + herberekende future slots
+  return [...fixed, ...futureSlots.map((s, i) => ({
+    ...s,
+    id: `slot-recalc-${fromIndex + 1}-${i}`,
+    status: 'pending',
+    executedAt: null,
+  }))];
+}
+
 export function useMatchState() {
   const [players, setPlayers] = useState([]);
   const [keeper, setKeeper] = useState(null);
@@ -50,6 +183,13 @@ export function useMatchState() {
   const [playerPositions, setPlayerPositions] = useState({}); // { "Bobby": { x: 50, y: 85 } }
   const [squadNumbers, setSquadNumbers] = useState({}); // { "Bobby": 1 }
 
+  // Wisselschema state (v3.16.0 — pre-calculated substitution schedule)
+  const [subSchedule, setSubSchedule] = useState([]); // [{id, half, time, absoluteTime, out, inn, status, executedAt}]
+  const [activeSlotIndex, setActiveSlotIndex] = useState(-1); // Index van actief wisselmoment (-1 = geen)
+  const [excludedPlayers, setExcludedPlayers] = useState([]); // Spelers uitgevallen (blessure/rood)
+  const [scheduleVersion, setScheduleVersion] = useState(0); // Teller voor herberekening tracking
+  const [subsPerSlot, setSubsPerSlot] = useState(1); // Berekend aantal wissels per moment
+
   // Multiplayer state
   const [matchCode, setMatchCode] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -67,6 +207,7 @@ export function useMatchState() {
   const coachIdRef = useRef(Math.random().toString(36).slice(2, 10)); // Unieke coach sessie ID
   const lastSyncTimeRef = useRef(0); // Timestamp laatste succesvolle PUT
   const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
+  const subLatencyRef = useRef(0); // Seconden latency tussen alert en coach actie
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -92,9 +233,11 @@ export function useMatchState() {
     injuryTime,
     isRunning, isPaused, halfBreak,
     matchMode, formation, playerPositions, squadNumbers,
+    // Wisselschema sync (v3.16.0)
+    subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
-  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, formation, playerPositions, squadNumbers]);
+  }), [view, team, coachName, homeTeam, awayTeam, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, subHistory, injuryTime, matchMode, formation, playerPositions, squadNumbers, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot]);
 
   const syncToServer = useCallback(() => {
     if (!isOnline || !matchCode) return;
@@ -188,6 +331,13 @@ export function useMatchState() {
     setPlayerPositions(data.playerPositions || {});
     setSquadNumbers(data.squadNumbers || {});
 
+    // Wisselschema state (v3.16.0)
+    if (data.subSchedule) setSubSchedule(data.subSchedule);
+    if (data.activeSlotIndex !== undefined) setActiveSlotIndex(data.activeSlotIndex);
+    if (data.excludedPlayers) setExcludedPlayers(data.excludedPlayers);
+    if (data.scheduleVersion !== undefined) setScheduleVersion(data.scheduleVersion);
+    if (data.subsPerSlot !== undefined) setSubsPerSlot(data.subsPerSlot);
+
     // Sub alert sluiten (andere coach heeft gewisseld of overgeslagen)
     if (showSubAlert) {
       setShowSubAlert(false);
@@ -244,12 +394,18 @@ export function useMatchState() {
   const toggleKeeper = (name) => setKeeper(keeper === name ? null : name);
 
   const calculateSubs = useCallback((field, bench, pt, kp) => {
+    // Schema-based: haal volgende pending slot uit het schema
+    if (subSchedule.length > 0) {
+      const nextSlot = subSchedule.find(s => s.status === 'pending');
+      if (nextSlot) return { out: nextSlot.out, inn: nextSlot.inn };
+    }
+    // Legacy fallback: ad-hoc berekening (backwards compatible)
     if (bench.length === 0) return { out: [], inn: [] };
     const el = field.filter(p => p !== kp);
     if (el.length === 0) return { out: [], inn: [] };
     const n = bench.length;
     return { out: [...el].sort((a, b) => (pt[b] || 0) - (pt[a] || 0)).slice(0, n), inn: [...bench].sort((a, b) => (pt[a] || 0) - (pt[b] || 0)).slice(0, n) };
-  }, []);
+  }, [subSchedule]);
 
   const startMatch = () => {
     if (players.length <= playersOnField) return;
@@ -265,10 +421,30 @@ export function useMatchState() {
     alertShownRef.current = false; setManualSubMode(null);
     setHomeScore(0); setAwayScore(0); setGoalScorers({});
     setEvents([]); // Reset events van vorige wedstrijd
+    setPendingEnd(false);
     // Tactiek: wijs spelers toe aan opstellingsposities
     if (matchMode === "tactiek" && formation && formation !== "custom") {
       setPlayerPositions(assignPlayersToFormation(formation, fl, keeper));
     }
+    // Wisselschema: genereer pre-calculated schedule bij start (alleen speeltijd modus)
+    if (matchMode !== "tactiek") {
+      const schedule = generateSubSchedule(players, keeper, playersOnField, halfDuration, halves, subInterval);
+      setSubSchedule(schedule);
+      setActiveSlotIndex(-1);
+      setExcludedPlayers([]);
+      setScheduleVersion(1);
+      const B = players.length - playersOnField;
+      const I = subInterval * 60;
+      const D = halfDuration * 60;
+      setSubsPerSlot(Math.max(1, Math.min(B, Math.round(B * I / D))));
+    } else {
+      setSubSchedule([]);
+      setActiveSlotIndex(-1);
+      setExcludedPlayers([]);
+      setScheduleVersion(0);
+      setSubsPerSlot(1);
+    }
+    subLatencyRef.current = 0;
     setView(VIEWS.MATCH);
   };
 
@@ -381,24 +557,141 @@ export function useMatchState() {
     }
     if (matchMode !== "tactiek" && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0) {
       alertShownRef.current = true;
+      // Track latency start (coach ziet nu de alert)
+      subLatencyRef.current = subTimer - (subInterval * 60);
+      // Zoek index van volgende pending slot in schema
+      const nextIdx = subSchedule.findIndex(s => s.status === 'pending');
+      if (nextIdx >= 0) setActiveSlotIndex(nextIdx);
       setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper));
       setShowSubAlert(true);
       notifySub();
     }
-  }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper]);
+  }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper, subSchedule]);
 
   const executeSubs = () => {
     const { out, inn } = suggestedSubs;
-    setOnField(onField.filter(p => !out.includes(p)).concat(inn));
-    setOnBench(onBench.filter(p => !inn.includes(p)).concat(out));
+    setOnField(prev => prev.filter(p => !out.includes(p)).concat(inn));
+    setOnBench(prev => prev.filter(p => !inn.includes(p)).concat(out));
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] }]);
-    setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false;
+    // Markeer slot als executed + detecteer edits voor herberekening
+    if (activeSlotIndex >= 0) {
+      const originalSlot = subSchedule[activeSlotIndex];
+      const wasEdited = originalSlot && (
+        JSON.stringify(originalSlot.out.slice().sort()) !== JSON.stringify([...out].sort()) ||
+        JSON.stringify(originalSlot.inn.slice().sort()) !== JSON.stringify([...inn].sort())
+      );
+      setSubSchedule(prev => {
+        const updated = prev.map((s, i) =>
+          i === activeSlotIndex ? { ...s, status: 'executed', executedAt: matchTimer, out: [...out], inn: [...inn] } : s
+        );
+        if (wasEdited) {
+          // Coach heeft voorstel aangepast: herbereken toekomstige slots
+          const newField = onField.filter(p => !out.includes(p)).concat(inn);
+          const newBench = onBench.filter(p => !inn.includes(p)).concat(out);
+          const recalc = recalculateRemainingSlots(
+            updated, activeSlotIndex, newField, newBench, playTime,
+            matchKeeper, halfDuration, halves, subInterval, excludedPlayers
+          );
+          setScheduleVersion(v => v + 1);
+          return recalc;
+        }
+        return updated;
+      });
+    }
+    // Latency-compensatie: overshoot meenemen naar volgende cyclus (niet 0 resetten)
+    const overshoot = subTimer - (subInterval * 60);
+    setSubTimer(Math.max(0, overshoot));
+    setShowSubAlert(false);
+    alertShownRef.current = false;
+    setActiveSlotIndex(-1);
+    subLatencyRef.current = 0;
     addEvent({ type: 'sub_auto', time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] });
   };
 
   const skipSubs = () => {
-    setShowSubAlert(false); setSubTimer(0); alertShownRef.current = false;
+    // Markeer slot als skipped in schema + herbereken resterende slots
+    if (activeSlotIndex >= 0) {
+      setSubSchedule(prev => {
+        const updated = prev.map((s, i) =>
+          i === activeSlotIndex ? { ...s, status: 'skipped', executedAt: matchTimer } : s
+        );
+        // Herbereken toekomstige slots met actuele speeltijden
+        const recalc = recalculateRemainingSlots(
+          updated, activeSlotIndex, onField, onBench, playTime,
+          matchKeeper, halfDuration, halves, subInterval, excludedPlayers
+        );
+        setScheduleVersion(v => v + 1);
+        return recalc;
+      });
+    }
+    // Latency-compensatie: overshoot meenemen
+    const overshoot = subTimer - (subInterval * 60);
+    setSubTimer(Math.max(0, overshoot));
+    setShowSubAlert(false);
+    alertShownRef.current = false;
+    setActiveSlotIndex(-1);
+    subLatencyRef.current = 0;
     addEvent({ type: 'sub_skipped', time: fmt(matchTimer), half: currentHalf });
+    syncToServer();
+  };
+
+  // Coach past wisselvoorstel aan via dropdowns in de alert
+  const editSubProposal = (index, direction, newPlayer) => {
+    setSuggestedSubs(prev => {
+      const updated = { out: [...prev.out], inn: [...prev.inn] };
+      updated[direction][index] = newPlayer;
+      return updated;
+    });
+  };
+
+  // Blessure/uitsluiting: speler verwijderen uit wedstrijd + schema herberekenen
+  const excludePlayer = (player) => {
+    const wasOnField = onField.includes(player);
+    const wasKeeper = player === matchKeeper;
+    let newField = [...onField];
+    let newBench = [...onBench];
+    const newExcluded = [...excludedPlayers, player];
+
+    if (wasOnField) {
+      newField = newField.filter(p => p !== player);
+      // Auto-vervanging: bankspeler met minste speeltijd erin
+      if (newBench.length > 0) {
+        const sorted = [...newBench].sort((a, b) => (playTime[a] || 0) - (playTime[b] || 0));
+        const replacement = sorted[0];
+        newField.push(replacement);
+        newBench = newBench.filter(p => p !== replacement);
+        setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [player], inn: [replacement], injury: true }]);
+        addEvent({ type: 'injury_sub', time: fmt(matchTimer), half: currentHalf, out: player, inn: replacement });
+      } else {
+        // Geen bankspelers: spelen met minder
+        addEvent({ type: 'injury_no_sub', time: fmt(matchTimer), half: currentHalf, out: player });
+      }
+    } else {
+      newBench = newBench.filter(p => p !== player);
+      addEvent({ type: 'injury_bench', time: fmt(matchTimer), half: currentHalf, out: player });
+    }
+
+    // Als geblesseerde speler keeper was: eerste veldspeler wordt keeper
+    let newKeeper = matchKeeper;
+    if (wasKeeper && newField.length > 0) {
+      newKeeper = newField[0];
+      setMatchKeeper(newKeeper);
+      addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
+    }
+
+    setOnField(newField);
+    setOnBench(newBench);
+    setExcludedPlayers(newExcluded);
+
+    // Schema herberekenen met nieuwe speler-pool
+    setSubSchedule(prev => {
+      const recalc = recalculateRemainingSlots(
+        prev, activeSlotIndex >= 0 ? activeSlotIndex : prev.findIndex(s => s.status === 'pending') - 1,
+        newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, newExcluded
+      );
+      setScheduleVersion(v => v + 1);
+      return recalc;
+    });
     syncToServer();
   };
 
@@ -414,9 +707,23 @@ export function useMatchState() {
   };
 
   const startNextHalf = () => {
-    setCurrentHalf(p => p + 1); setHalfBreak(false); setInjuryTime(false); setSubTimer(0); alertShownRef.current = false;
-    addEvent({ type: 'half_start', time: fmt(matchTimer), half: currentHalf + 1 });
-    if (onBench.length > 0) { setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper)); setShowSubAlert(true); notifySub(); }
+    const nextHalf = currentHalf + 1;
+    setCurrentHalf(nextHalf);
+    setHalfBreak(false);
+    setInjuryTime(false);
+    setSubTimer(0);
+    alertShownRef.current = false;
+    subLatencyRef.current = 0;
+    addEvent({ type: 'half_start', time: fmt(matchTimer), half: nextHalf });
+    // Toon eerste wissel van nieuwe helft als er bankspelers zijn
+    if (onBench.length > 0) {
+      // Zoek volgende pending slot (in het nieuwe helft-gedeelte van schema)
+      const nextIdx = subSchedule.findIndex(s => s.status === 'pending');
+      if (nextIdx >= 0) setActiveSlotIndex(nextIdx);
+      setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper));
+      setShowSubAlert(true);
+      notifySub();
+    }
   };
 
   const manualSub = (fp, bp) => {
@@ -449,6 +756,19 @@ export function useMatchState() {
     setMatchKeeper(newKeeper);
     setShowKeeperPicker(false);
     addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
+    // Keeper van bank: veld/bank compositie veranderd → schema herberekenen
+    if (fromBench) {
+      const newField = onField.map(p => (p === matchKeeper ? newKeeper : p));
+      const newBench = onBench.map(p => (p === newKeeper ? matchKeeper : p));
+      setSubSchedule(prev => {
+        const pivotIdx = activeSlotIndex >= 0 ? activeSlotIndex : prev.findIndex(s => s.status === 'pending') - 1;
+        const recalc = recalculateRemainingSlots(
+          prev, pivotIdx, newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, excludedPlayers
+        );
+        setScheduleVersion(v => v + 1);
+        return recalc;
+      });
+    }
   };
 
   const updatePlayerPosition = (name, pos) => {
@@ -579,6 +899,8 @@ export function useMatchState() {
     matchMode, setMatchMode, formation, setFormation,
     playerPositions, setPlayerPositions, updatePlayerPosition,
     squadNumbers, setSquadNumbers,
+    // Wisselschema (v3.16.0)
+    subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
     coachName, setCoachName, viewers, events, pendingEnd,
@@ -588,7 +910,7 @@ export function useMatchState() {
     totalMatchTime,
     // Actions
     addPlayer, removePlayer, movePlayer, toggleKeeper,
-    startMatch, startTimer, executeSubs, skipSubs, forceEndHalf, startNextHalf,
+    startMatch, startTimer, executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf,
     manualSub, swapKeeper, setIsRunning, calculateSubs,
   };
 }
