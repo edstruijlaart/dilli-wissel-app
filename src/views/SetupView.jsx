@@ -130,7 +130,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     return () => document.removeEventListener("visibilitychange", handler);
   });
 
-  const canStart = players.length > playersOnField && !!keeper;
+  const canStart = players.length >= playersOnField && !!keeper;
 
   return (
     <div style={base}>
@@ -348,7 +348,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
                     <div>
                       <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6 }}>Kies keeper voor helft {emptyIdx + 1}:</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {players.filter(p => !keeperQueue.includes(p)).map(p => (
+                        {players.map(p => (
                           <button key={p} onClick={() => {
                             const q = [...keeperQueue];
                             // Pad met nulls tot emptyIdx
@@ -392,7 +392,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
         )}
 
         <button onClick={onStartMatch} disabled={!canStart} style={{ ...btnP, width: "100%", padding: "16px 0", fontSize: 16, opacity: canStart ? 1 : 0.3, cursor: canStart ? "pointer" : "not-allowed", boxShadow: canStart ? "0 4px 16px rgba(22,163,74,0.25)" : "none" }}>
-          {!canStart ? (players.length > playersOnField && !keeper ? "Wijs eerst een keeper aan" : `Nog ${Math.max(1, playersOnField - players.length + 1)} speler${playersOnField - players.length + 1 !== 1 ? "s" : ""} nodig`) : "Start wedstrijd →"}
+          {!canStart ? (players.length >= playersOnField && !keeper ? "Wijs eerst een keeper aan" : `Nog ${Math.max(1, playersOnField - players.length)} speler${playersOnField - players.length !== 1 ? "s" : ""} nodig`) : "Start wedstrijd →"}
         </button>
       </div>
     </div>
