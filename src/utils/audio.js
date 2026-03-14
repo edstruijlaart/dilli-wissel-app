@@ -1,17 +1,27 @@
-import * as Tone from 'tone';
+let _ctx = null;
 
-let _toneStarted = false;
-
-function ensureTone() {
-  if (!_toneStarted) { Tone.start(); _toneStarted = true; }
+function getAudioContext() {
+  if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_ctx.state === 'suspended') _ctx.resume();
+  return _ctx;
 }
 
 export const playWhistle = () => {
   try {
-    ensureTone();
-    const synth = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.2 } }).toDestination();
-    synth.triggerAttackRelease(3200, 0.5);
-  } catch (e) { console.warn("Whistle:", e); }
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 3200;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.01);  // attack
+    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);   // decay → sustain
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);     // release
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) { console.warn('Whistle:', e); }
 };
 
 export const vibrate = (pattern = [200, 100, 200]) => { try { navigator.vibrate?.(pattern); } catch(e) {} };

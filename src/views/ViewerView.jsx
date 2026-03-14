@@ -164,7 +164,7 @@ export default function ViewerView({ code, onBack }) {
         </div>
 
         {/* Audio Timeline - Only show latest update for viewers */}
-        <AudioTimeline matchCode={code} maxItems={1} />
+        <AudioTimeline matchCode={code} maxItems={1} events={events} />
 
         {/* Half break */}
         {match.halfBreak && (

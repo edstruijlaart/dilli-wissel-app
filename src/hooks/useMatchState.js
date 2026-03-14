@@ -306,11 +306,12 @@ export function useMatchState() {
     syncTimeoutRef.current = setTimeout(async () => {
       try {
         const snapshot = getMatchSnapshot();
-        await fetch(`/api/match/${matchCode}`, {
+        const res = await fetch(`/api/match/${matchCode}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(snapshot),
         });
+        if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
         setSyncError(null);
         lastSyncTimeRef.current = Date.now();
         // Flush pending events die eerder gefaald zijn
@@ -340,11 +341,12 @@ export function useMatchState() {
     if (!isOnline || !matchCode) return;
     const ev = { ...event, id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
     try {
-      await fetch(`/api/match/events/${matchCode}`, {
+      const res = await fetch(`/api/match/events/${matchCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(ev),
       });
+      if (!res.ok) throw new Error(`Event sync failed: ${res.status}`);
     } catch (err) {
       console.error('Event sync error:', err);
       pendingEventsRef.current.push(ev);

@@ -1,32 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { T, card } from '../theme';
 
-export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null, poll = true }) {
+export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null, poll = true, events: externalEvents = null }) {
   const [messages, setMessages] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);
   const [fullscreenPhoto, setFullscreenPhoto] = useState(null);
 
+  // Gebruik externe events voor foto's als beschikbaar (voorkomt dubbele fetch)
+  useEffect(() => {
+    if (!externalEvents) return;
+    const photoEvents = externalEvents.filter(ev => ev.type === 'photo');
+    setPhotos(photoEvents);
+  }, [externalEvents]);
+
   useEffect(() => {
     if (!matchCode) return;
 
     const fetchUpdates = async () => {
       try {
-        // Fetch audio messages
+        // Fetch audio messages (altijd nodig, komt uit Blob API)
         const audioRes = await fetch(`/api/match/audio/${matchCode}`);
         if (audioRes.ok) {
           const audioData = await audioRes.json();
           setMessages(audioData.messages || []);
         }
 
-        // Fetch events (for photos)
-        const eventsRes = await fetch(`/api/match/events/${matchCode}`);
-        if (eventsRes.ok) {
-          const eventsData = await eventsRes.json();
-          // eventsData is the array directly, not { events: [...] }
-          const photoEvents = Array.isArray(eventsData) ? eventsData.filter(ev => ev.type === 'photo') : [];
-          setPhotos(photoEvents);
+        // Fetch events voor foto's alleen als er geen externe events zijn
+        if (!externalEvents) {
+          const eventsRes = await fetch(`/api/match/events/${matchCode}`);
+          if (eventsRes.ok) {
+            const eventsData = await eventsRes.json();
+            const photoEvents = Array.isArray(eventsData) ? eventsData.filter(ev => ev.type === 'photo') : [];
+            setPhotos(photoEvents);
+          }
         }
       } catch (err) {
         console.error('Fetch updates error:', err);
@@ -39,7 +47,7 @@ export default function AudioTimeline({ matchCode, isCoach = false, maxItems = n
     if (!poll) return;
     const interval = setInterval(fetchUpdates, 10000); // Poll every 10s
     return () => clearInterval(interval);
-  }, [matchCode, poll]);
+  }, [matchCode, poll, externalEvents]);
 
   const handleDeleteAudio = async (url) => {
     if (!confirm('Audio update verwijderen?')) return;
