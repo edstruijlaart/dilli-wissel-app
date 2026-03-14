@@ -263,6 +263,7 @@ export function useMatchState() {
   const lastSyncTimeRef = useRef(0); // Timestamp laatste succesvolle PUT
   const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
   const subLatencyRef = useRef(0); // Seconden latency tussen alert en coach actie
+  const halfJustStartedRef = useRef(false); // Guard: skip half-end detection na helft-overgang
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -603,8 +604,13 @@ export function useMatchState() {
   // Half end + sub alert detection
   useEffect(() => {
     if (!isRunning || isPaused || halfBreak) return;
+    // Guard: skip detection direct na helft-overgang (voorkom valse triggers)
+    if (halfJustStartedRef.current) {
+      halfJustStartedRef.current = false;
+      return;
+    }
     const hs = halfDuration * 60;
-    const he = matchTimer - (currentHalf - 1) * hs;
+    const he = Math.max(0, matchTimer - (currentHalf - 1) * hs);
     const maxInjuryTime = 5 * 60; // 5 minuten blessuretijd
 
     // Blessuretijd: tussen hs en hs + 5 min
@@ -799,6 +805,14 @@ export function useMatchState() {
 
   const startNextHalf = () => {
     const nextHalf = currentHalf + 1;
+    // Snap timer naar helftgrens: voorkom dat overgeschoten blessuretijd
+    // de half-end detection triggert voor de nieuwe helft
+    const expectedStart = currentHalf * halfDuration * 60;
+    if (matchTimer > expectedStart) {
+      setMatchTimer(expectedStart);
+      matchTimerRef.current = expectedStart;
+    }
+    halfJustStartedRef.current = true;
     setCurrentHalf(nextHalf);
     setHalfBreak(false);
     setInjuryTime(false);

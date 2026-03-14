@@ -142,7 +142,7 @@ export default function ViewerView({ code, onBack }) {
           <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
             Helft {match.currentHalf} van {match.halves}
           </div>
-          <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(elapsed)}</div>
+          <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(Math.max(0, elapsed - ((match.currentHalf || 1) - 1) * (match.halfDuration || 10) * 60))}</div>
           {match.autoSubs && match.isRunning && !match.isPaused && !match.halfBreak && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Wissel over {fmt(Math.max(0, match.subInterval * 60 - subElapsed))}</div>
           )}
@@ -419,6 +419,9 @@ function MatchSummary({ match, events, code, onBack }) {
             </div>
           );
         })()}
+
+        {/* Updates: audio + foto's */}
+        <AudioTimeline matchCode={code} />
 
         {/* Deel uitslag */}
         <button onClick={() => shareResult(match, events)} style={{

@@ -183,7 +183,7 @@ export default function MatchView({ state }) {
                 {injuryTime ? "Blessuretijd" : "Tijd"}
               </div>
               <div style={{ ...mono, fontSize: 32, fontWeight: 700, lineHeight: 1, color: injuryTime ? T.warn : T.text }}>
-                {injuryTime ? fmt(injuryTimeElapsed) : fmt(matchTimer)}
+                {injuryTime ? fmt(injuryTimeElapsed) : fmt(he)}
               </div>
             </div>
           </div>

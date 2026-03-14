@@ -4,6 +4,7 @@ import { fmt } from '../utils/format';
 import Icons from '../components/Icons';
 import DilliLogo from '../components/DilliLogo';
 import Badge from '../components/Badge';
+import AudioTimeline from '../components/AudioTimeline';
 export default function SummaryView({ state, onNewMatch }) {
   const { players, playTime, matchKeeper, subHistory, homeTeam, awayTeam, homeLogo, awayLogo, homeScore, awayScore, matchCode, subSchedule, excludedPlayers } = state;
   const [goalEvents, setGoalEvents] = useState([]);
@@ -152,6 +153,9 @@ export default function SummaryView({ state, onNewMatch }) {
             </div>
           );
         })()}
+        {/* Updates: audio + foto's */}
+        {matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} />}
+
         <button onClick={() => shareCoachResult({ homeTeam, awayTeam, homeScore, awayScore }, goalEvents)} style={{
           width: "100%", padding: "14px 24px", marginBottom: 10,
           background: "linear-gradient(135deg, #25D366, #128C7E)",

@@ -69,9 +69,14 @@ export default function SetupView({ state, onStartMatch, onBack }) {
     fetch(`/api/schedule?team=${encodeURIComponent(team)}&weken=4`)
       .then(r => r.ok ? r.json() : Promise.reject('API error'))
       .then(matches => {
-        const now = new Date();
-        // Vind eerstvolgende wedstrijd (in de toekomst, geen uitslag)
-        const upcoming = matches.find(m => new Date(m.datum) >= now && !m.uitslag && !m.afgelast);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        // Vind eerstvolgende wedstrijd (vandaag of later, geen uitslag)
+        const upcoming = matches.find(m => {
+          const matchDay = new Date(m.datum);
+          matchDay.setHours(0, 0, 0, 0);
+          return matchDay >= today && !m.uitslag && !m.afgelast;
+        });
         setSchedule({ loading: false, match: upcoming || null, error: null });
         // Auto-fill tegenstander als het veld nog leeg is
         if (upcoming && !awayTeam) {
