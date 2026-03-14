@@ -94,8 +94,8 @@ export async function checkCoachPush(code, match) {
     const totalHalves = match.halves || 2;
     const score = `${match.homeScore || 0} - ${match.awayScore || 0}`;
 
-    // 1. Wisseladvies — autoSubs aan + subInterval overdue
-    if (match.autoSubs && match.subInterval > 0 && match.subTimerStartedAt) {
+    // 1. Wisseladvies — autoSubs aan + subInterval overdue + bankspelers beschikbaar
+    if (match.autoSubs && match.subInterval > 0 && match.subTimerStartedAt && match.onBench && match.onBench.length > 0) {
       const subElapsed = Math.floor((now - new Date(match.subTimerStartedAt).getTime()) / 1000);
       if (subElapsed >= subIntervalSec) {
         const slotId = Math.floor(halfElapsed / subIntervalSec);
