@@ -469,7 +469,7 @@ export function useMatchState() {
   }, [subSchedule]);
 
   const startMatch = () => {
-    if (players.length <= playersOnField) return;
+    if (players.length < playersOnField) return;
     const init = {}; players.forEach(p => (init[p] = 0));
     let fl, bl;
     if (keeper) { const nk = players.filter(p => p !== keeper); fl = [keeper, ...nk.slice(0, playersOnField - 1)]; bl = nk.slice(playersOnField - 1); }
