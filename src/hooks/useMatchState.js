@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { playWhistle, notifySub, notifyHalf, notifyEnd, notifyGoal } from '../utils/audio';
-import { fmt } from '../utils/format';
+import { fmt, getHalfElapsed } from '../utils/format';
 import { assignPlayersToFormation } from '../data/formations';
 
 export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
@@ -610,7 +610,7 @@ export function useMatchState() {
       return;
     }
     const hs = halfDuration * 60;
-    const he = Math.max(0, matchTimer - (currentHalf - 1) * hs);
+    const he = getHalfElapsed(matchTimer, currentHalf, halfDuration);
     const maxInjuryTime = 5 * 60; // 5 minuten blessuretijd
 
     // Blessuretijd: tussen hs en hs + 5 min

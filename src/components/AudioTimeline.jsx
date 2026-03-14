@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { T, card } from '../theme';
 
-export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null }) {
+export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null, poll = true }) {
   const [messages, setMessages] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,9 +36,10 @@ export default function AudioTimeline({ matchCode, isCoach = false, maxItems = n
     };
 
     fetchUpdates();
+    if (!poll) return;
     const interval = setInterval(fetchUpdates, 10000); // Poll every 10s
     return () => clearInterval(interval);
-  }, [matchCode]);
+  }, [matchCode, poll]);
 
   const handleDeleteAudio = async (url) => {
     if (!confirm('Audio update verwijderen?')) return;

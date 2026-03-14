@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, btnP, btnS, btnD, mono } from '../theme';
-import { fmt } from '../utils/format';
+import { fmt, getHalfElapsed } from '../utils/format';
 import { fireConfetti } from '../utils/confetti';
 import { vibrate } from '../utils/audio';
 import Icons from '../components/Icons';
@@ -142,7 +142,7 @@ export default function MatchView({ state }) {
   };
 
   const hs = halfDuration * 60;
-  const he = matchTimer - (currentHalf - 1) * hs;
+  const he = getHalfElapsed(matchTimer, currentHalf, halfDuration);
   const hr = hs - he;
   const sr = subInterval * 60 - subTimer;
   const hp = (he / hs) * 100;

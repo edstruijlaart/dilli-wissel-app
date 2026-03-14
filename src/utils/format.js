@@ -1,5 +1,8 @@
 export const fmt = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+export const getHalfElapsed = (totalElapsed, currentHalf, halfDurationMin) =>
+  Math.max(0, totalElapsed - (currentHalf - 1) * halfDurationMin * 60);
+
 export const parseNames = (text) => {
   if (!text || !text.trim()) return [];
   const lines = text.split("\n").map(function(l) { return l.trim(); }).filter(Boolean);

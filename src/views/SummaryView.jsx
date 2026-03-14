@@ -154,7 +154,7 @@ export default function SummaryView({ state, onNewMatch }) {
           );
         })()}
         {/* Updates: audio + foto's */}
-        {matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} />}
+        {matchCode && <AudioTimeline matchCode={matchCode} isCoach={true} poll={false} />}
 
         <button onClick={() => shareCoachResult({ homeTeam, awayTeam, homeScore, awayScore }, goalEvents)} style={{
           width: "100%", padding: "14px 24px", marginBottom: 10,

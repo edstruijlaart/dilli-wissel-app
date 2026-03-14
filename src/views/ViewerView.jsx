@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { T, base, card, mono } from '../theme';
-import { fmt } from '../utils/format';
+import { fmt, getHalfElapsed } from '../utils/format';
 import { fireConfetti } from '../utils/confetti';
 import { notifyGoal } from '../utils/audio';
 import { useMatchPolling } from '../hooks/useMatchPolling';
@@ -142,7 +142,7 @@ export default function ViewerView({ code, onBack }) {
           <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
             Helft {match.currentHalf} van {match.halves}
           </div>
-          <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(Math.max(0, elapsed - ((match.currentHalf || 1) - 1) * (match.halfDuration || 10) * 60))}</div>
+          <div style={{ ...mono, fontSize: 48, fontWeight: 800, color: T.text, lineHeight: 1 }}>{fmt(getHalfElapsed(elapsed, match.currentHalf || 1, match.halfDuration || 20))}</div>
           {match.autoSubs && match.isRunning && !match.isPaused && !match.halfBreak && (
             <div style={{ fontSize: 11, color: T.textMuted, marginTop: 6 }}>Wissel over {fmt(Math.max(0, match.subInterval * 60 - subElapsed))}</div>
           )}
@@ -370,9 +370,6 @@ function MatchSummary({ match, events, code, onBack }) {
                 </div>
               );
             })}
-            {allGoals.length === 0 && (
-              <div style={{ fontSize: 13, color: T.textMuted, textAlign: "center", padding: 10 }}>Geen doelpunten</div>
-            )}
           </div>
         )}
 
@@ -421,7 +418,7 @@ function MatchSummary({ match, events, code, onBack }) {
         })()}
 
         {/* Updates: audio + foto's */}
-        <AudioTimeline matchCode={code} />
+        <AudioTimeline matchCode={code} poll={false} />
 
         {/* Deel uitslag */}
         <button onClick={() => shareResult(match, events)} style={{
