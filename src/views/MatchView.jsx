@@ -241,9 +241,9 @@ export default function MatchView({ state }) {
             {homeLogo && <img src={homeLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{homeTeam || "Thuis"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <button onClick={() => updateScore('home', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
+              <button onClick={() => updateScore('home', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{homeScore}</span>
-              <button onClick={() => handleGoal('home')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => handleGoal('home')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
           <div style={{ fontSize: 20, color: T.textMuted, fontWeight: 300, padding: "0 4px" }}>–</div>
@@ -251,9 +251,9 @@ export default function MatchView({ state }) {
             {awayLogo && <img src={awayLogo} alt="" style={{ width: 28, height: 28, objectFit: "contain", marginBottom: 4 }} onError={e => { e.target.style.display = 'none'; }} />}
             <div style={{ fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{awayTeam || "Uit"}</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-              <button onClick={() => updateScore('away', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
+              <button onClick={() => updateScore('away', -1)} style={{ background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", color: T.textDim, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>−</button>
               <span style={{ ...mono, fontSize: 36, fontWeight: 700, color: T.text, minWidth: 36, textAlign: "center" }}>{awayScore}</span>
-              <button onClick={() => handleGoal('away')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
+              <button onClick={() => handleGoal('away')} style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", color: T.accent, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif" }}>+</button>
             </div>
           </div>
         </div>

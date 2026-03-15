@@ -260,6 +260,7 @@ export function useMatchState() {
   const matchTimerRef = useRef(0); // Huidige matchTimer waarde voor interval closure
   const pendingEventsRef = useRef([]); // Queue voor gefaalde event syncs
   const coachIdRef = useRef(Math.random().toString(36).slice(2, 10)); // Unieke coach sessie ID
+  const coachSecretRef = useRef(null); // Auth token voor write operaties
   const lastSyncTimeRef = useRef(0); // Timestamp laatste succesvolle PUT
   const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
   const subLatencyRef = useRef(0); // Seconden latency tussen alert en coach actie
@@ -306,9 +307,11 @@ export function useMatchState() {
     syncTimeoutRef.current = setTimeout(async () => {
       try {
         const snapshot = getMatchSnapshot();
+        const headers = { 'Content-Type': 'application/json' };
+        if (coachSecretRef.current) headers['X-Coach-Secret'] = coachSecretRef.current;
         const res = await fetch(`/api/match/${matchCode}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify(snapshot),
         });
         if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
@@ -320,9 +323,11 @@ export function useMatchState() {
           pendingEventsRef.current = [];
           for (const ev of pending) {
             try {
+              const evHeaders = { 'Content-Type': 'application/json' };
+              if (coachSecretRef.current) evHeaders['X-Coach-Secret'] = coachSecretRef.current;
               await fetch(`/api/match/events/${matchCode}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: evHeaders,
                 body: JSON.stringify(ev),
               });
             } catch {
@@ -341,9 +346,11 @@ export function useMatchState() {
     if (!isOnline || !matchCode) return;
     const ev = { ...event, id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (coachSecretRef.current) headers['X-Coach-Secret'] = coachSecretRef.current;
       const res = await fetch(`/api/match/events/${matchCode}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(ev),
       });
       if (!res.ok) throw new Error(`Event sync failed: ${res.status}`);
@@ -443,6 +450,10 @@ export function useMatchState() {
 
       setMatchCode(data.code);
       setIsOnline(true);
+      coachSecretRef.current = data.coachSecret || null;
+      if (data.coachSecret) {
+        try { localStorage.setItem(`dilli_secret_${data.code}`, data.coachSecret); } catch {}
+      }
       return data.code;
     } catch (err) {
       console.error('Create match error:', err);

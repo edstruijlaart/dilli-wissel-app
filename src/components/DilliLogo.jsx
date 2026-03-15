@@ -26,4 +26,4 @@ const DilliLogo = ({ size = 72 }) => (
   </svg>
 );
 
-export default DilliLogo;
+export default React.memo(DilliLogo);

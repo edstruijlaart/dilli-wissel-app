@@ -7,6 +7,13 @@ import { checkCoachPush } from '../_lib/push.js';
  * Dit lost het probleem op dat pushes alleen werkten als er actief gepolled werd.
  */
 export default async function handler(req, res) {
+  // Vercel crons sturen Authorization: Bearer <CRON_SECRET>
+  const authHeader = req.headers['authorization'];
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const codes = await redis.smembers('active_matches');
     if (!codes || codes.length === 0) {

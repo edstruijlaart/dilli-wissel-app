@@ -41,8 +41,8 @@ function svgToPos(svgX, svgY) {
   };
 }
 
-// Veld markeringen als SVG elementen
-function PitchMarkings() {
+// Veld markeringen als SVG elementen (puur statisch, nooit herrenderen)
+const PitchMarkings = React.memo(function PitchMarkings() {
   const pw = W; // pitch width = full SVG
   const ph = H;
   const cx = pw / 2;
@@ -87,9 +87,9 @@ function PitchMarkings() {
       <path d={`M ${pw - 2} ${2 + cornerR} A ${cornerR} ${cornerR} 0 0 0 ${pw - 2 - cornerR} ${2}`} />
     </g>
   );
-}
+});
 
-function PlayerMarker({ name, pos, num, isKeeper, isSelected, interactive, onTap }) {
+const PlayerMarker = React.memo(function PlayerMarker({ name, pos, num, isKeeper, isSelected, interactive, onTap }) {
   const { cx, cy } = posToSvg(pos);
   const fill = isKeeper ? T.keeper : T.accent;
   const strokeColor = isSelected ? T.danger : '#fff';
@@ -132,7 +132,7 @@ function PlayerMarker({ name, pos, num, isKeeper, isSelected, interactive, onTap
       </text>
     </g>
   );
-}
+});
 
 export default function FieldView({
   onField = [],

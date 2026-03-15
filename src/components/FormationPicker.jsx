@@ -8,7 +8,7 @@ import { FORMATION_KEYS } from '../data/formations';
  * - value: string — huidige formatie key ("4-3-3" | "custom" | null)
  * - onChange: (key) => void
  */
-export default function FormationPicker({ value, onChange }) {
+const FormationPicker = React.memo(function FormationPicker({ value, onChange }) {
   const options = [...FORMATION_KEYS, "custom"];
 
   return (
@@ -51,4 +51,6 @@ export default function FormationPicker({ value, onChange }) {
       })}
     </div>
   );
-}
+});
+
+export default FormationPicker;

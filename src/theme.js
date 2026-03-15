@@ -1,6 +1,6 @@
 export const T = {
   bg: "#F5F5F7", card: "#FFFFFF", cardBorder: "#E2E5EA",
-  text: "#1A1D23", textDim: "#6B7280", textMuted: "#9CA3AF",
+  text: "#1A1D23", textDim: "#4B5563", textMuted: "#6B7280",
   accent: "#16A34A", accentDim: "#DCFCE7",
   warn: "#D97706", warnDim: "#FEF3C7",
   danger: "#DC2626", dangerDim: "#FEE2E2",

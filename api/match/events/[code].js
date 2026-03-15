@@ -1,5 +1,6 @@
 import { redis, MATCH_TTL } from '../../_lib/redis.js';
 import { sendPushToAll } from '../../_lib/push.js';
+import { validateCoach } from '../../_lib/auth.js';
 
 /**
  * Build push payload for viewer notification based on event type.
@@ -84,6 +85,9 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
+      const authorized = await validateCoach(req, code);
+      if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
+
       const existing = await redis.get(key);
       if (!existing) return res.status(404).json({ error: 'Match not found' });
       const events = typeof existing === 'string' ? JSON.parse(existing) : existing;

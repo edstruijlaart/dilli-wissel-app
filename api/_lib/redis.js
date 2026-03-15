@@ -17,7 +17,7 @@ export const MATCH_TTL = 60 * 60 * 24; // 24 uur
 export function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Coach-Secret, X-Match-Time, X-Half, X-Message',
   };
 }

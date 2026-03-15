@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.21.0
+**Status**: Actief productie — v3.36.0
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -22,8 +22,8 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 | Push | Web Push API + web-push | Coach/kijker notificaties (VAPID) |
 | Styling | Inline CSS-in-JS | Geen build-stap voor styles |
 | Fonts | Google Fonts | DM Sans + JetBrains Mono |
-| Audio (tonen) | Tone.js 14 | Fluitsignalen |
-| Data (match state) | Vercel KV (`@upstash/redis`) | Match state + events (TTL 8 uur) |
+| Audio (tonen) | Web Audio API | Fluitsignalen (sine wave oscillator) |
+| Data (match state) | Vercel KV (`@upstash/redis`) | Match state + events (TTL 24 uur) |
 | Data (audio/foto) | Vercel Blob (`@vercel/blob`) | Audio webm + JPEG foto's |
 | API | Vercel Serverless Functions | `/api/match/*` routes |
 | Hosting | Vercel | Auto-deploy bij git push |
@@ -35,7 +35,7 @@ meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates e
 ```
 dilli-wissel-app/
 ├── index.html                    # Vite entry, dynamisch manifest op basis van URL
-├── package.json                  # v3.20.0
+├── package.json                  # v3.36.0
 ├── vite.config.js                # Vite + React + PWA config (injectManifest)
 ├── vercel.json                   # SPA rewrites + API routes
 ├── CLAUDE.md                     # Dit bestand
@@ -57,7 +57,8 @@ dilli-wissel-app/
 │   ├── secretariaat/
 │   │   └── verify.js            # Secretariaat authenticatie verificatie
 │   ├── _lib/
-│   │   ├── redis.js             # Upstash Redis client + MATCH_TTL
+│   │   ├── redis.js             # Upstash Redis client + MATCH_TTL + CORS headers
+│   │   ├── auth.js              # Coach auth: generateSecret(), validateCoach(req, code)
 │   │   └── push.js              # Web Push utility: sendPush, sendPushToAll, checkDedup
 │   ├── push/
 │   │   ├── subscribe.js         # POST: PushSubscription opslaan (coach/viewer)
@@ -88,8 +89,9 @@ dilli-wissel-app/
     │   └── formations.js           # 8 standaard formaties (4-3-3 t/m 4-5-1) + assignPlayersToFormation() + FORMATION_KEYS
     │
     ├── utils/
-    │   ├── format.js             # fmt(seconds) → "mm:ss", parseNames()
-    │   ├── audio.js              # playWhistle(), vibrate(), notifyGoal() via Tone.js
+    │   ├── format.js             # fmt(seconds) → "mm:ss", parseNames(), getHalfElapsed()
+    │   ├── audio.js              # playWhistle(), vibrate(), notifyGoal() via Web Audio API
+    │   ├── auth.js               # getCoachSecret(), authHeaders() — client-side auth utility
     │   ├── confetti.js           # fireConfetti() canvas animatie bij doelpunten
     │   └── pushNotifications.js  # isPushSupported, subscribeToPush, isIOS, isInstalledPWA
     │
@@ -213,13 +215,39 @@ dilli-wissel-app/
 
 ---
 
+## Security: Coach Auth Tokens (v3.36.0)
+
+Alle write endpoints zijn beschermd met een `coachSecret` token:
+
+```
+POST /api/match/create → genereert coachSecret (crypto.randomBytes)
+  → opgeslagen in match object (Redis) + localStorage (client)
+  → alle POST/PUT/DELETE requests sturen X-Coach-Secret header
+
+Validatie (api/_lib/auth.js):
+  - validateCoach(req, code) checkt X-Coach-Secret header tegen match.coachSecret
+  - Backward compat: oude matches zonder coachSecret worden doorgelaten
+  - 403 bij ongeldige secret
+
+Client (src/utils/auth.js):
+  - getCoachSecret(matchCode) → leest uit localStorage
+  - authHeaders(matchCode) → { 'Content-Type': 'application/json', 'X-Coach-Secret': '...' }
+```
+
+Beschermde endpoints: PUT match/[code], POST events/[code], POST/DELETE audio/[code], POST/DELETE photo/upload.
+
+Cron endpoint (`/api/cron/check-push`) beschermd met `CRON_SECRET` env var (Bearer token).
+
+---
+
 ## Data Flow
 
 ### Match State (Vercel KV)
 ```
-Coach → PUT /api/match/{code} → Redis (TTL 8u)
+Coach → PUT /api/match/{code} → Redis (TTL 24u)
                                      ↓ poll elke 5s
                               Viewer GET /api/match/{code}
+  → GET response strips coachSecret (nooit exposed aan viewers)
 ```
 
 ### Events (Vercel KV)
@@ -276,6 +304,7 @@ Coach → PhotoCapture → POST /api/match/photo/upload
 | `VAPID_SUBJECT` | Web Push contact (`mailto:ed@edstruijlaart.nl`) |
 | `ADMIN_PASSWORD` | Admin panel toegang |
 | `SECRETARIAAT_PASSWORD` | Secretariaat panel toegang |
+| `CRON_SECRET` | Bearer token voor `/api/cron/check-push` (vercel.json) |
 
 ---
 

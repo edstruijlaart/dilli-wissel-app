@@ -24,11 +24,15 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
     try { return JSON.parse(localStorage.getItem('dilli_coach'))?.team || null; } catch { return null; }
   });
 
-  // Haal live wedstrijden op
+  // Haal live wedstrijden op (10s interval, pauzeert bij achtergrond tab)
   useEffect(() => {
     fetchLiveMatches();
-    const interval = setInterval(fetchLiveMatches, 5000); // Poll elke 5s
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchLiveMatches();
+    }, 10000);
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchLiveMatches(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const fetchLiveMatches = async () => {

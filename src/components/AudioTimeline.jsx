@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { T, card } from '../theme';
+import { authHeaders } from '../utils/auth';
 
 export default function AudioTimeline({ matchCode, isCoach = false, maxItems = null, poll = true, events: externalEvents = null }) {
   const [messages, setMessages] = useState([]);
@@ -56,7 +57,7 @@ export default function AudioTimeline({ matchCode, isCoach = false, maxItems = n
     try {
       const res = await fetch(`/api/match/audio/${matchCode}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(matchCode),
         body: JSON.stringify({ url }),
       });
 
@@ -78,8 +79,8 @@ export default function AudioTimeline({ matchCode, isCoach = false, maxItems = n
     try {
       const res = await fetch('/api/match/photo/upload', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        headers: authHeaders(matchCode),
+        body: JSON.stringify({ url, matchCode }),
       });
 
       if (res.ok) {

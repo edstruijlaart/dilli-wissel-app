@@ -1,4 +1,5 @@
 import { put, list, del } from '@vercel/blob';
+import { validateCoach } from '../../_lib/auth.js';
 
 export const config = {
   api: {
@@ -38,6 +39,8 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     // Upload audio message
     try {
+      const authorized = await validateCoach(req, code);
+      if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
       // Read raw body as buffer
       const chunks = [];
       for await (const chunk of req) {
@@ -78,6 +81,8 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     // Delete audio message by URL
     try {
+      const authorized = await validateCoach(req, code);
+      if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
       const { url } = req.body;
       if (!url) {
         return res.status(400).json({ error: 'URL required' });

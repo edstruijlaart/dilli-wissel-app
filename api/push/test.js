@@ -111,7 +111,7 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       console.error('Test push error:', err);
-      return res.status(500).json({ error: err.message, stack: err.stack?.substring(0, 500) });
+      return res.status(500).json({ error: 'Push test failed' });
     }
   }
 

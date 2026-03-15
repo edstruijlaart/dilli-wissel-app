@@ -1,5 +1,6 @@
 import { redis, MATCH_TTL } from '../_lib/redis.js';
 import { checkCoachPush } from '../_lib/push.js';
+import { validateCoach } from '../_lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).json({});
@@ -29,7 +30,9 @@ export default async function handler(req, res) {
       // Push checks for coach (fire alongside response)
       await checkCoachPush(code.toUpperCase(), match);
 
-      return res.status(200).json(match);
+      // Strip coachSecret uit response (viewers mogen dit niet zien)
+      const { coachSecret: _, ...safeMatch } = match;
+      return res.status(200).json(safeMatch);
     } catch (err) {
       console.error('Get match error:', err);
       return res.status(500).json({ error: 'Failed to get match' });
@@ -38,11 +41,17 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     try {
+      const authorized = await validateCoach(req, code);
+      if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
+
       const existing = await redis.get(key);
       if (!existing) return res.status(404).json({ error: 'Match not found' });
+      const existingMatch = typeof existing === 'string' ? JSON.parse(existing) : existing;
 
       const match = req.body;
       match.code = code.toUpperCase();
+      // Behoud coachSecret (client stuurt dit niet mee)
+      if (existingMatch.coachSecret) match.coachSecret = existingMatch.coachSecret;
       await redis.set(key, JSON.stringify(match), { ex: MATCH_TTL });
 
       // Track active matches voor cron-based push checks

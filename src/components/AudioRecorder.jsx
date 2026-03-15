@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { T, btnP, btnS, btnD, mono } from '../theme';
 import Icons from './Icons';
+import { getCoachSecret } from '../utils/auth';
 
 export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClose, onUploaded }) {
   const [state, setState] = useState('idle'); // idle | recording | stopped | uploading
@@ -63,14 +64,18 @@ export default function AudioRecorder({ matchCode, matchTime, currentHalf, onClo
     try {
       const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
 
+      const uploadHeaders = {
+        'Content-Type': 'audio/webm',
+        'X-Match-Time': matchTime,
+        'X-Half': currentHalf.toString(),
+        'X-Message': encodeURIComponent(message.trim() || ''),
+      };
+      const secret = getCoachSecret(matchCode);
+      if (secret) uploadHeaders['X-Coach-Secret'] = secret;
+
       const res = await fetch(`/api/match/audio/${matchCode}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'audio/webm',
-          'X-Match-Time': matchTime,
-          'X-Half': currentHalf.toString(),
-          'X-Message': encodeURIComponent(message.trim() || ''),
-        },
+        headers: uploadHeaders,
         body: blob,
       });
 

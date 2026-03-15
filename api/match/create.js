@@ -1,4 +1,5 @@
 import { redis, generateCode, MATCH_TTL, corsHeaders } from '../_lib/redis.js';
+import { generateSecret } from '../_lib/auth.js';
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).json({});
@@ -42,8 +43,11 @@ export default async function handler(req, res) {
       exists = await redis.exists(`match:${code}`);
     } while (exists);
 
+    const coachSecret = generateSecret();
+
     const match = {
       code,
+      coachSecret,
       status: 'setup',
       team: team || '',
       homeTeam: team || homeTeam || 'Dilettant',
@@ -74,7 +78,7 @@ export default async function handler(req, res) {
     await redis.set(`match:${code}`, JSON.stringify(match), { ex: MATCH_TTL });
     await redis.set(`match:${code}:events`, JSON.stringify([]), { ex: MATCH_TTL });
 
-    res.status(201).json({ code, match });
+    res.status(201).json({ code, coachSecret, match });
   } catch (err) {
     console.error('Create match error:', err);
     res.status(500).json({ error: 'Failed to create match' });

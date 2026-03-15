@@ -15,4 +15,4 @@ const Badge = ({ children, variant = "field" }) => {
   );
 };
 
-export default Badge;
+export default React.memo(Badge);

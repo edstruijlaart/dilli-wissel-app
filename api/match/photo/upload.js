@@ -2,6 +2,7 @@
 // Docs: https://vercel.com/docs/storage/vercel-blob
 
 import { put, del } from '@vercel/blob';
+import { validateCoach } from '../../_lib/auth.js';
 
 export const config = {
   api: {
@@ -12,12 +13,14 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  console.log('Photo request received:', req.method);
-
   if (req.method === 'DELETE') {
     // Delete photo from Vercel Blob
     try {
-      const { url } = req.body;
+      const { url, matchCode: deleteCode } = req.body;
+      if (deleteCode) {
+        const authorized = await validateCoach(req, deleteCode);
+        if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
+      }
       if (!url) {
         return res.status(400).json({ error: 'URL required' });
       }
@@ -36,10 +39,10 @@ export default async function handler(req, res) {
   }
 
   const { matchCode, image, timestamp, caption } = req.body;
-  console.log('Match code:', matchCode);
-  console.log('Has image:', !!image);
-  console.log('Image length:', image?.length);
-  console.log('Caption:', caption);
+
+  // Validate coach auth
+  const authorized = await validateCoach(req, matchCode);
+  if (!authorized) return res.status(403).json({ error: 'Unauthorized' });
 
   if (!matchCode || !image) {
     return res.status(400).json({ error: 'Missing matchCode or image' });
@@ -59,11 +62,9 @@ export default async function handler(req, res) {
     // Convert base64 to buffer
     const base64Data = image.split(',')[1];
     const buffer = Buffer.from(base64Data, 'base64');
-    console.log('Buffer size:', Math.round(buffer.length / 1024), 'KB');
 
     // Generate unique filename
     const filename = `match-${matchCode.toLowerCase()}-${timestamp || Date.now()}.jpg`;
-    console.log('Uploading to blob:', filename);
 
     // Check if token exists (BLOB2 for photos, fallback to BLOB)
     const blobToken = process.env.BLOB2_READ_WRITE_TOKEN || process.env.BLOB_READ_WRITE_TOKEN;
@@ -82,15 +83,12 @@ export default async function handler(req, res) {
       },
     });
 
-    console.log('Upload success:', blob.url);
-
     return res.status(200).json({
       url: blob.url,
       filename: blob.pathname,
     });
   } catch (err) {
     console.error('Photo upload error:', err);
-    console.error('Error stack:', err.stack);
-    return res.status(500).json({ error: err.message || 'Upload failed' });
+    return res.status(500).json({ error: 'Upload failed' });
   }
 }

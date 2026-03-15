@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { T, btnP, btnS, btnD } from '../theme';
 import Icons from './Icons';
+import { authHeaders } from '../utils/auth';
 
 /**
  * PhotoCapture component - Camera access + photo upload
@@ -150,7 +151,7 @@ export default function PhotoCapture({ matchCode, onClose, onPhotoUploaded }) {
     try {
       const res = await fetch('/api/match/photo/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(matchCode),
         body: JSON.stringify({
           matchCode,
           image: photoData,
