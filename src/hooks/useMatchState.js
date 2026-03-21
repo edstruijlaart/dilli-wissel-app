@@ -5,6 +5,13 @@ import { assignPlayersToFormation } from '../data/formations';
 
 export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
 
+// Dedup helper: verwijder duplicaten uit een array (behoud eerste voorkomen)
+const dedup = (arr) => [...new Set(arr)];
+
+// Pivot index voor schema herberekening: vind startpunt voor recalculate
+const getPivotIndex = (schedule, activeIdx) =>
+  activeIdx >= 0 ? activeIdx : Math.max(-1, schedule.findIndex(s => s.status === 'pending') - 1);
+
 // --- Pre-calculated substitution schedule (v3.16.0) ---
 
 /**
@@ -36,9 +43,9 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   const fieldSlots = F - 1; // veldplekken excl. keeper
   // perSlot wordt nu per-slot berekend: eerste slot van elke helft = 2, daarna 1
 
-  // Gebruik meegegeven field/bench of bereken initieel
-  let field = initialField ? [...initialField] : [keeperName, ...outfield.slice(0, F - 1)];
-  let bench = initialBench ? [...initialBench] : outfield.slice(F - 1);
+  // Gebruik meegegeven field/bench of bereken initieel — dedup voor veiligheid
+  let field = dedup(initialField ? [...initialField] : [keeperName, ...outfield.slice(0, F - 1)]);
+  let bench = dedup(initialBench ? [...initialBench] : outfield.slice(F - 1)).filter(p => !field.includes(p));
 
   // Filter uitgesloten spelers
   field = field.filter(p => !excludedList.includes(p));
@@ -161,15 +168,17 @@ function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBen
   // Behoud alle slots t/m fromIndex (executed/skipped)
   const fixed = schedule.filter((s, i) => i <= fromIndex);
 
-  // Alle actieve spelers = field + bench (keeper zit al in field)
-  const allPlayers = [...currentField, ...currentBench];
+  // Alle actieve spelers = field + bench (keeper zit al in field) — dedup voor veiligheid
+  const dedupField = dedup(currentField);
+  const dedupBench = dedup(currentBench.filter(p => !dedupField.includes(p)));
+  const allPlayers = [...dedupField, ...dedupBench];
 
   // Genereer nieuw schema met actuele speeltijden en veld/bank bezetting
   const remaining = generateSubSchedule(
-    allPlayers, keeperName, currentField.length,
+    allPlayers, keeperName, dedupField.length,
     hDuration, nHalves, sInterval,
     currentPlayTime, excluded,
-    currentField, currentBench,
+    dedupField, dedupBench,
     keeperRotationEnabled, keeperQueueList
   );
 
@@ -364,9 +373,11 @@ export function useMatchState() {
   const applyServerSnapshot = useCallback((data) => {
     isAdoptingRef.current = true;
 
-    // Live match state
-    setOnField(data.onField || []);
-    setOnBench(data.onBench || []);
+    // Live match state — dedup + ensure player only in one list
+    const serverField = dedup(data.onField || []);
+    const serverBench = dedup((data.onBench || []).filter(p => !serverField.includes(p)));
+    setOnField(serverField);
+    setOnBench(serverBench);
     setPlayTime(data.playTime || {});
     setHomeScore(data.homeScore || 0);
     setAwayScore(data.awayScore || 0);
@@ -664,8 +675,8 @@ export function useMatchState() {
 
   const executeSubs = () => {
     const { out, inn } = suggestedSubs;
-    setOnField(prev => prev.filter(p => !out.includes(p)).concat(inn));
-    setOnBench(prev => prev.filter(p => !inn.includes(p)).concat(out));
+    setOnField(prev => dedup(prev.filter(p => !out.includes(p) && !inn.includes(p)).concat(inn)));
+    setOnBench(prev => dedup(prev.filter(p => !inn.includes(p) && !out.includes(p)).concat(out)));
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] }]);
     // Markeer slot als executed + detecteer edits voor herberekening
     if (activeSlotIndex >= 0) {
@@ -680,8 +691,8 @@ export function useMatchState() {
         );
         if (wasEdited) {
           // Coach heeft voorstel aangepast: herbereken toekomstige slots
-          const newField = onField.filter(p => !out.includes(p)).concat(inn);
-          const newBench = onBench.filter(p => !inn.includes(p)).concat(out);
+          const newField = dedup(onField.filter(p => !out.includes(p) && !inn.includes(p)).concat(inn));
+          const newBench = dedup(onBench.filter(p => !inn.includes(p) && !out.includes(p)).concat(out));
           const recalc = recalculateRemainingSlots(
             updated, activeSlotIndex, newField, newBench, playTime,
             matchKeeper, halfDuration, halves, subInterval, excludedPlayers,
@@ -752,12 +763,16 @@ export function useMatchState() {
       newField = newField.filter(p => p !== player);
       // Auto-vervanging: bankspeler met minste speeltijd erin
       if (newBench.length > 0) {
-        const sorted = [...newBench].sort((a, b) => (playTime[a] || 0) - (playTime[b] || 0));
+        const sorted = [...newBench].filter(p => !newField.includes(p)).sort((a, b) => (playTime[a] || 0) - (playTime[b] || 0));
         const replacement = sorted[0];
-        newField.push(replacement);
-        newBench = newBench.filter(p => p !== replacement);
-        setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [player], inn: [replacement], injury: true }]);
-        addEvent({ type: 'injury_sub', time: fmt(matchTimer), half: currentHalf, out: player, inn: replacement });
+        if (replacement) {
+          newField.push(replacement);
+          newBench = newBench.filter(p => p !== replacement);
+          setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [player], inn: [replacement], injury: true }]);
+          addEvent({ type: 'injury_sub', time: fmt(matchTimer), half: currentHalf, out: player, inn: replacement });
+        } else {
+          addEvent({ type: 'injury_no_sub', time: fmt(matchTimer), half: currentHalf, out: player });
+        }
       } else {
         // Geen bankspelers: spelen met minder
         addEvent({ type: 'injury_no_sub', time: fmt(matchTimer), half: currentHalf, out: player });
@@ -795,7 +810,7 @@ export function useMatchState() {
     // Schema herberekenen met nieuwe speler-pool
     setSubSchedule(prev => {
       const recalc = recalculateRemainingSlots(
-        prev, activeSlotIndex >= 0 ? activeSlotIndex : prev.findIndex(s => s.status === 'pending') - 1,
+        prev, getPivotIndex(prev, activeSlotIndex),
         newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, newExcluded,
         keeperRotation, keeperQueue
       );
@@ -881,6 +896,8 @@ export function useMatchState() {
   };
 
   const manualSub = (fp, bp) => {
+    // Validatie: speler moet daadwerkelijk op veld resp. bank staan
+    if (!onField.includes(fp) || !onBench.includes(bp)) return;
     const wasKeeper = fp === matchKeeper;
     setOnField(onField.map(p => (p === fp ? bp : p)));
     setOnBench(onBench.map(p => (p === bp ? fp : p)));
@@ -921,9 +938,8 @@ export function useMatchState() {
       const newField = onField.map(p => (p === matchKeeper ? newKeeper : p));
       const newBench = onBench.map(p => (p === newKeeper ? matchKeeper : p));
       setSubSchedule(prev => {
-        const pivotIdx = activeSlotIndex >= 0 ? activeSlotIndex : prev.findIndex(s => s.status === 'pending') - 1;
         const recalc = recalculateRemainingSlots(
-          prev, pivotIdx, newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, excludedPlayers
+          prev, getPivotIndex(prev, activeSlotIndex), newField, newBench, playTime, newKeeper, halfDuration, halves, subInterval, excludedPlayers
         );
         setScheduleVersion(v => v + 1);
         return recalc;
