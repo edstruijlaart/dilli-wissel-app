@@ -95,21 +95,27 @@ export async function checkCoachPush(code, match) {
     const score = `${match.homeScore || 0} - ${match.awayScore || 0}`;
 
     // 1. Wisseladvies — autoSubs aan + subInterval overdue + bankspelers beschikbaar
-    if (match.autoSubs && match.subInterval > 0 && match.subTimerStartedAt && match.onBench && match.onBench.length > 0) {
+    //    + remainingInHalf check: geen push in laatste 2 minuten van helft (consistent met client)
+    const remainingInHalf = halfDurationSec - halfElapsed;
+    if (match.autoSubs && match.subInterval > 0 && match.subTimerStartedAt && match.onBench && match.onBench.length > 0 && remainingInHalf >= 120) {
       const subElapsed = Math.floor((now - new Date(match.subTimerStartedAt).getTime()) / 1000);
       if (subElapsed >= subIntervalSec) {
-        const slotId = Math.floor(halfElapsed / subIntervalSec);
-        const dedupKey = `push:sub:${code}:${currentHalf}:${slotId}`;
-        const alreadySent = await checkDedup(dedupKey, 300);
-        if (!alreadySent) {
-          await sendPushToAll(code, 'coach', {
-            title: '🔄 Tijd om te wisselen!',
-            body: 'Wisselmoment bereikt — open de app',
-            vibrate: [200, 100, 200, 100, 200],
-            tag: `sub-${code}`,
-            matchCode: code,
-            url: '/',
-          });
+        // Check of er nog pending slots zijn in het schema
+        const hasPendingSlots = !match.subSchedule || match.subSchedule.some(s => s.status === 'pending');
+        if (hasPendingSlots) {
+          const slotId = Math.floor(halfElapsed / subIntervalSec);
+          const dedupKey = `push:sub:${code}:${currentHalf}:${slotId}`;
+          const alreadySent = await checkDedup(dedupKey, 300);
+          if (!alreadySent) {
+            await sendPushToAll(code, 'coach', {
+              title: '🔄 Tijd om te wisselen!',
+              body: 'Wisselmoment bereikt — open de app',
+              vibrate: [200, 100, 200, 100, 200],
+              tag: `sub-${code}`,
+              matchCode: code,
+              url: '/',
+            });
+          }
         }
       }
     }

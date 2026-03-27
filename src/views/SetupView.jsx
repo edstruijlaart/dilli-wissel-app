@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { T, base, card, btnP, btnS, mono } from '../theme';
 import { parseNames } from '../utils/format';
 import { vibrate } from '../utils/audio';
@@ -29,6 +29,45 @@ export default function SetupView({ state, onStartMatch, onBack }) {
   } = state;
 
   const showFieldView = playersOnField >= 7;
+
+  // Drag & drop state voor spelersvolgorde
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const dragStartY = useRef(0);
+  const dragItemHeight = useRef(0);
+  const listRef = useRef(null);
+
+  const handleDragStart = useCallback((i, e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    dragStartY.current = touch.clientY;
+    const row = e.currentTarget.closest('[data-player-row]');
+    if (row) dragItemHeight.current = row.offsetHeight + 4; // gap = 4
+    setDragIdx(i);
+    setDragOverIdx(i);
+    vibrate([10]);
+  }, []);
+
+  const handleDragMove = useCallback((e) => {
+    if (dragIdx === null) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const diff = touch.clientY - dragStartY.current;
+    const offset = Math.round(diff / (dragItemHeight.current || 40));
+    const newIdx = Math.max(0, Math.min(players.length - 1, dragIdx + offset));
+    setDragOverIdx(newIdx);
+  }, [dragIdx, players.length]);
+
+  const handleDragEnd = useCallback(() => {
+    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+      const updated = [...players];
+      const [moved] = updated.splice(dragIdx, 1);
+      updated.splice(dragOverIdx, 0, moved);
+      setPlayers(updated);
+    }
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }, [dragIdx, dragOverIdx, players, setPlayers]);
 
   // Bereken veldspelers voor FieldView preview
   const fieldPlayers = (() => {
@@ -205,13 +244,7 @@ export default function SetupView({ state, onStartMatch, onBack }) {
             <Stepper label="In veld" value={playersOnField} set={setPlayersOnField} min={3} step={1} />
             <Stepper label="Helften" value={halves} set={setHalves} min={1} step={1} />
             <Stepper label="Min / helft" value={halfDuration} set={setHalfDuration} min={5} step={5} />
-            {autoSubs && <Stepper label="Wissel elke" value={subInterval} set={setSubInterval} min={2} step={1} />}
           </div>
-          {autoSubs && subInterval >= halfDuration && (
-            <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: T.dangerDim, fontSize: 12, color: T.danger, fontWeight: 600 }}>
-              ⚠️ Wisselinterval ({subInterval} min) ≥ helftduur ({halfDuration} min) — geen wissels mogelijk!
-            </div>
-          )}
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>Tegenstander</div>
             <input type="text" value={awayTeam} onChange={e => setAwayTeam(e.target.value)} placeholder="Tegenstander" style={{ width: "100%", padding: "9px 12px", background: T.glass, border: `1px solid ${T.glassBorder}`, borderRadius: 10, color: T.text, fontSize: 14, fontFamily: "'DM Sans',sans-serif", outline: "none", boxSizing: "border-box" }} />
@@ -273,16 +306,17 @@ export default function SetupView({ state, onStartMatch, onBack }) {
 
           {players.length > 0 && <p style={{ fontSize: 11, color: T.textMuted, marginBottom: 10, textAlign: "center" }}>Tik {Icons.glove(11, T.textMuted)} voor keeper</p>}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div ref={listRef} style={{ display: "flex", flexDirection: "column", gap: 4 }} onTouchMove={handleDragMove} onTouchEnd={handleDragEnd}>
             {players.map((p, i) => {
               const isK = keeper === p;
               const isField = isK || (keeper ? players.filter((pl, idx) => idx < i && pl !== keeper).length + 1 < playersOnField : i < playersOnField);
+              const isDragging = dragIdx === i;
+              const isDropTarget = dragOverIdx === i && dragIdx !== null && dragIdx !== i;
               return (
-                <div key={p} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 10, background: isK ? "rgba(217,119,6,0.06)" : isField ? "rgba(22,163,74,0.04)" : "rgba(217,119,6,0.04)", border: isK ? `1px solid ${T.keeperDim}` : `1px solid ${T.glassBorder}` }}>
+                <div key={p} data-player-row style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 10, background: isK ? "rgba(217,119,6,0.06)" : isField ? "rgba(22,163,74,0.04)" : "rgba(217,119,6,0.04)", border: isDragging ? `2px solid ${T.accent}` : isDropTarget ? `2px dashed ${T.accent}` : isK ? `1px solid ${T.keeperDim}` : `1px solid ${T.glassBorder}`, opacity: isDragging ? 0.6 : 1, transition: isDragging ? "none" : "all 0.15s" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <button onClick={() => movePlayer(i, -1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex" }}>{Icons.chevUp(10, T.textMuted)}</button>
-                      <button onClick={() => movePlayer(i, 1)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, display: "flex" }}>{Icons.chevDown(10, T.textMuted)}</button>
+                    <div onTouchStart={(e) => handleDragStart(i, e)} style={{ cursor: "grab", padding: "4px 2px", display: "flex", alignItems: "center", touchAction: "none", color: T.textMuted, fontSize: 16, lineHeight: 1, userSelect: "none" }}>
+                      ≡
                     </div>
                     <button onClick={() => toggleKeeper(p)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, opacity: isK ? 1 : 0.3, transition: "opacity 0.2s", display: "flex" }}>{Icons.glove(16, isK ? T.keeper : T.textMuted)}</button>
                     <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{p}</span>
