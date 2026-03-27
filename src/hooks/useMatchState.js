@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { playWhistle, notifySub, notifyHalf, notifyEnd, notifyGoal } from '../utils/audio';
 import { fmt, getHalfElapsed } from '../utils/format';
 import { assignPlayersToFormation } from '../data/formations';
@@ -102,39 +102,24 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
 
     // Keeper swap bij helft-overgang
     if (half > 1 && keeperRotationEnabled && prevHalfKeeper && prevHalfKeeper !== halfKeeper) {
-      // Credit ex-keeper met 0.5× keepertijd (keepen telt als halve speeltijd)
       projected[prevHalfKeeper] = (projected[prevHalfKeeper] || 0) + D * 0.5;
 
-      // Als nieuwe keeper op de bank stond: wissel met een veldspeler
-      if (bench.includes(halfKeeper)) {
-        bench = bench.filter(p => p !== halfKeeper);
-        field = [...field, halfKeeper];
-        // Veldspeler met meeste speeltijd naar bank om ruimte te maken
-        // (maar niet de ex-keeper want die heeft grace period)
-        const canGoBench = field.filter(p => p !== halfKeeper && p !== prevHalfKeeper);
-        if (canGoBench.length > field.length - F) {
-          canGoBench.sort((a, b) => (projected[b] || 0) - (projected[a] || 0));
-          const toLeaveCnt = field.length - F;
-          const leaving = canGoBench.slice(0, toLeaveCnt);
-          field = field.filter(p => !leaving.includes(p));
-          bench = [...bench, ...leaving];
-        }
-      }
-      // Ex-keeper moet op veld staan (als die op bank terecht was gekomen)
-      if (bench.includes(prevHalfKeeper)) {
-        bench = bench.filter(p => p !== prevHalfKeeper);
-        field = [...field, prevHalfKeeper];
-        // Balance: iemand anders naar bank
-        const canGoBench = field.filter(p => p !== halfKeeper && p !== prevHalfKeeper);
-        if (field.length > F && canGoBench.length > 0) {
+      // Promote speler van bank naar veld, balanceer als veld te groot wordt
+      const promoteToField = (player) => {
+        if (!bench.includes(player)) return;
+        bench = bench.filter(p => p !== player);
+        field = [...field, player];
+        if (field.length > F) {
+          const canGoBench = field.filter(p => p !== halfKeeper && p !== prevHalfKeeper);
           canGoBench.sort((a, b) => (projected[b] || 0) - (projected[a] || 0));
           const leaving = canGoBench.slice(0, field.length - F);
           field = field.filter(p => !leaving.includes(p));
           bench = [...bench, ...leaving];
         }
-      }
-    } else if (half === 1) {
-      // Eerste helft: keeper staat al in field, geen credit nodig
+      };
+
+      promoteToField(halfKeeper);
+      promoteToField(prevHalfKeeper);
     }
 
     // Grace period: ex-keeper mag niet naar bank in eerste slot van deze helft
@@ -177,16 +162,13 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
         if (ptDiff !== 0) return ptDiff;
         const fsDiff = (fieldStreak[b] || 0) - (fieldStreak[a] || 0);
         if (fsDiff !== 0) return fsDiff;
-        // Spreiding: als laatste bank-speler top-helft was, prefereer bottom-helft en vice versa
+        // Spreiding: prefereer speler uit andere sterkte-helft dan laatste bank-speler
         if (lastBankWasTop !== null) {
           const aIsTop = (rankOf[a] || 0) < midRank;
           const bIsTop = (rankOf[b] || 0) < midRank;
           if (aIsTop !== bIsTop) {
-            // Prefereer de speler die NIET in dezelfde helft zit als de laatste
-            if (lastBankWasTop && !aIsTop) return -1;
-            if (lastBankWasTop && !bIsTop) return 1;
-            if (!lastBankWasTop && aIsTop) return -1;
-            if (!lastBankWasTop && bIsTop) return 1;
+            const preferA = lastBankWasTop ? !aIsTop : aIsTop;
+            return preferA ? -1 : 1;
           }
         }
         return 0;
@@ -649,13 +631,9 @@ export function useMatchState() {
         setMatchTimer(elapsed);
         setSubTimer(prev => prev + delta);
         setOnField(cf => {
-          // Track keepertijd apart (voor 0.5x weging in wisselalgoritme)
-          setKeeperPlayTime(prev => {
-            if (!matchKeeper) return prev;
-            const kp = matchKeeper;
-            if (cf.includes(kp)) return { ...prev, [kp]: (prev[kp] || 0) + delta };
-            return prev;
-          });
+          if (matchKeeper && cf.includes(matchKeeper)) {
+            setKeeperPlayTime(prev => ({ ...prev, [matchKeeper]: (prev[matchKeeper] || 0) + delta }));
+          }
           setPlayTime(prev => {
             const n = { ...prev };
             cf.forEach(p => (n[p] = (n[p] || 0) + delta));
@@ -721,6 +699,9 @@ export function useMatchState() {
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [isOnline, matchCode, view, applyServerSnapshot]);
 
+  // Memoize: index van volgende pending slot (voorkomt array scan elke seconde)
+  const nextPendingSlotIdx = useMemo(() => subSchedule.findIndex(s => s.status === 'pending'), [subSchedule]);
+
   // Half end + sub alert detection
   useEffect(() => {
     if (!isRunning || isPaused || halfBreak) return;
@@ -756,17 +737,15 @@ export function useMatchState() {
     }
     // Geen wisseladvies in laatste 2 minuten van helft + alleen als er pending slots zijn
     const remainingInHalf = hs - he;
-    const nextPendingIdx = subSchedule.findIndex(s => s.status === 'pending');
-    if (autoSubs && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0 && remainingInHalf >= 120 && nextPendingIdx >= 0) {
+    if (autoSubs && subTimer >= subInterval * 60 && !alertShownRef.current && onBench.length > 0 && remainingInHalf >= 120 && nextPendingSlotIdx >= 0) {
       alertShownRef.current = true;
-      // Track latency start (coach ziet nu de alert)
       subLatencyRef.current = subTimer - (subInterval * 60);
-      setActiveSlotIndex(nextPendingIdx);
+      setActiveSlotIndex(nextPendingSlotIdx);
       setSuggestedSubs(calculateSubs(onField, onBench, playTime, matchKeeper));
       setShowSubAlert(true);
       notifySub();
     }
-  }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper, subSchedule]);
+  }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper, nextPendingSlotIdx]);
 
   const executeSubs = () => {
     const { out, inn } = suggestedSubs;
@@ -982,9 +961,8 @@ export function useMatchState() {
 
     addEvent({ type: 'half_start', time: fmt(matchTimer), half: nextHalf });
     // Dynamisch interval herberekenen (bankgrootte kan gewijzigd zijn door keeper swap)
-    const currentBench = onBench;
-    if (autoSubs && currentBench.length > 0) {
-      const newInterval = calculateDynamicInterval(halfDuration, currentBench.length);
+    if (autoSubs && onBench.length > 0) {
+      const newInterval = calculateDynamicInterval(halfDuration, onBench.length);
       setSubInterval(newInterval);
     }
     // Wissel-alert komt automatisch via timer detection (subTimer start op 0)
