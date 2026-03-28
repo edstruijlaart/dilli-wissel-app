@@ -30,7 +30,26 @@ export default async function handler(req, res) {
       // Push checks for coach (fire alongside response)
       await checkCoachPush(code.toUpperCase(), match);
 
-      // Strip coachSecret uit response (viewers mogen dit niet zien)
+      // Coach reconnect: als request een geldige coach-code meestuurt, stuur coachSecret mee
+      // Viewers krijgen de secret NOOIT te zien
+      const coachCode = req.headers['x-coach-code'];
+      let includeSecret = false;
+      if (coachCode && match.coachSecret) {
+        // Valideer coach-code tegen team registry
+        try {
+          const { redis: r } = await import('../_lib/redis.js');
+          const teams = await r.get('coach_teams');
+          const parsed = typeof teams === 'string' ? JSON.parse(teams) : teams;
+          if (parsed) {
+            const entry = Object.entries(parsed).find(([k]) => k.toUpperCase() === coachCode.toUpperCase());
+            if (entry) includeSecret = true;
+          }
+        } catch { /* ignore, don't include secret */ }
+      }
+
+      if (includeSecret) {
+        return res.status(200).json(match);
+      }
       const { coachSecret: _, ...safeMatch } = match;
       return res.status(200).json(safeMatch);
     } catch (err) {

@@ -487,11 +487,17 @@ export function useMatchState() {
     if (data.scheduleVersion !== undefined) setScheduleVersion(data.scheduleVersion);
     if (data.subsPerSlot !== undefined) setSubsPerSlot(data.subsPerSlot);
 
-    // Sub alert sluiten (andere coach heeft gewisseld of overgeslagen)
-    if (showSubAlert) {
+    // Sub alert: alleen sluiten als de server GEEN alert meer heeft
+    // (andere coach heeft gewisseld of overgeslagen)
+    if (showSubAlert && !data.showSubAlert) {
       setShowSubAlert(false);
+      alertShownRef.current = false;
+    } else if (data.showSubAlert && data.suggestedSubs) {
+      // Server heeft alert: overnemen (voor reconnect en sync)
+      setShowSubAlert(true);
+      setSuggestedSubs(data.suggestedSubs);
+      alertShownRef.current = true;
     }
-    alertShownRef.current = false;
 
     // Anti-echo: reset na React batch update
     setTimeout(() => { isAdoptingRef.current = false; }, 0);
@@ -749,6 +755,12 @@ export function useMatchState() {
 
   const executeSubs = () => {
     const { out, inn } = suggestedSubs;
+    // Guard: voorkom stille no-op als suggestedSubs leeg is (race condition met multi-coach sync)
+    if (out.length === 0 || inn.length === 0) {
+      setShowSubAlert(false);
+      alertShownRef.current = false;
+      return;
+    }
     setOnField(prev => dedup(prev.filter(p => !out.includes(p) && !inn.includes(p)).concat(inn)));
     setOnBench(prev => dedup(prev.filter(p => !inn.includes(p) && !out.includes(p)).concat(out)));
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] }]);
@@ -786,6 +798,7 @@ export function useMatchState() {
     setActiveSlotIndex(-1);
     subLatencyRef.current = 0;
     addEvent({ type: 'sub_auto', time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] });
+    syncToServer();
   };
 
   const skipSubs = () => {
@@ -1058,12 +1071,31 @@ export function useMatchState() {
   // --- Reconnect: herstel state vanuit server na page refresh ---
   const reconnectToMatch = useCallback(async (code) => {
     try {
-      const res = await fetch(`/api/match/${code}`);
+      // Stuur coach-code mee zodat de server de coachSecret kan teruggeven
+      const headers = {};
+      try {
+        const saved = JSON.parse(localStorage.getItem('dilli_coach') || '{}');
+        if (saved.code) headers['X-Coach-Code'] = saved.code;
+      } catch { /* ignore */ }
+
+      const res = await fetch(`/api/match/${code}`, { headers });
       if (!res.ok) {
         console.error('Reconnect failed:', res.status, res.statusText, 'for code:', code);
         return false;
       }
       const data = await res.json();
+
+      // CoachSecret: gebruik server response (als coach-code geldig was) of localStorage
+      if (data.coachSecret) {
+        coachSecretRef.current = data.coachSecret;
+        try { localStorage.setItem(`dilli_secret_${code}`, data.coachSecret); } catch {}
+      } else {
+        // Fallback: probeer uit localStorage (van eerdere sessie)
+        try {
+          const stored = localStorage.getItem(`dilli_secret_${code}`);
+          if (stored) coachSecretRef.current = stored;
+        } catch {}
+      }
 
       // Setup state (niet in applyServerSnapshot)
       setMatchCode(code);

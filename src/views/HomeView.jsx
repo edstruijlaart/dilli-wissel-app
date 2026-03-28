@@ -88,8 +88,8 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
             });
             if (res.ok) {
               const fresh = await res.json();
-              if (fresh.valid && fresh.players?.length) {
-                data.players = fresh.players;
+              if (fresh.valid) {
+                if (fresh.players?.length) data.players = fresh.players;
                 data.team = fresh.team || data.team;
                 if (fresh.settings) data.settings = fresh.settings;
                 if (fresh.squadNumbers) data.squadNumbers = fresh.squadNumbers;
