@@ -660,10 +660,16 @@ export function useMatchState() {
     if (players.length < playersOnField) return;
     clearMatchLog(); // Fresh log voor nieuwe wedstrijd
     const init = {}; players.forEach(p => (init[p] = 0));
+    // Shuffle niet-keeper spelers: eerlijke random verdeling wie op de bank begint
+    const shuffle = (arr) => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    };
     let fl, bl;
-    if (keeper) { const nk = players.filter(p => p !== keeper); fl = [keeper, ...nk.slice(0, playersOnField - 1)]; bl = nk.slice(playersOnField - 1); }
-    else { fl = players.slice(0, playersOnField); bl = players.slice(playersOnField); }
-    logAction('startMatch', { players: players.length, field: fl.length, bench: bl.length, keeper, halves, halfDuration });
+    if (keeper) { const nk = shuffle(players.filter(p => p !== keeper)); fl = [keeper, ...nk.slice(0, playersOnField - 1)]; bl = nk.slice(playersOnField - 1); }
+    else { const shuffled = shuffle([...players]); fl = shuffled.slice(0, playersOnField); bl = shuffled.slice(playersOnField); }
+    logAction('startMatch', { players: players.length, field: fl.length, bench: bl.length, benchStart: [...bl], keeper, halves, halfDuration });
     setOnField(fl); setOnBench(bl); setMatchKeeper(keeper);
     setPlayTime(init); setKeeperPlayTime({}); setCurrentHalf(1); setMatchTimer(0); setSubTimer(0);
     matchTimerRef.current = 0; // Reset ref zodat delta-berekening niet negatief wordt
