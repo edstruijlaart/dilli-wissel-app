@@ -29,6 +29,7 @@ export default function MatchView({ state }) {
     matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
     subSchedule, activeSlotIndex, subsPerSlot, subHistory,
     keeperRotation, keeperQueue,
+    repairState,
   } = state;
 
   const showFieldView = playersOnField >= 7;
@@ -636,6 +637,25 @@ export default function MatchView({ state }) {
                 🏥 Blessure / Uitsluiting
               </button>
             )}
+
+            {/* Repair knop: toon alleen als state inconsistent is */}
+            {(() => {
+              const fieldSet = new Set(onField);
+              const hasOverlap = onBench.some(p => fieldSet.has(p));
+              const allActive = players.filter(p => !(state.excludedPlayers || []).includes(p));
+              const accounted = new Set([...onField, ...onBench]);
+              const hasMissing = allActive.some(p => !accounted.has(p));
+              if (!hasOverlap && !hasMissing) return null;
+              return (
+                <button onClick={() => { state.repairState(); }} style={{
+                  ...btnS, width: "100%", padding: "10px 0", fontSize: 13, marginTop: 6,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  color: "#f59e0b", borderColor: "#f59e0b", background: "rgba(245,158,11,0.08)",
+                }}>
+                  ⚠️ State inconsistent — Herstel
+                </button>
+              );
+            })()}
 
             {/* Uitgesloten spelers */}
             {state.excludedPlayers?.length > 0 && (

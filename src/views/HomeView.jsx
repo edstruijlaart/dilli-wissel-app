@@ -5,7 +5,7 @@ import Icons from '../components/Icons';
 import { VERSION } from '../version';
 import { isIOS, isInstalledPWA, isPushSupported } from '../utils/pushNotifications';
 
-export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAsCoach }) {
+export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAsCoach, onViewHistory }) {
   const [liveMatches, setLiveMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -329,6 +329,13 @@ export default function HomeView({ onStartLocal, onStartOnline, onJoin, onJoinAs
           {Icons.timer(18)}
           Alleen voor mezelf (offline)
         </button>
+
+        {/* Wedstrijden terugkijken */}
+        {loggedInTeam && onViewHistory && (
+          <button onClick={() => onViewHistory(loggedInTeam)} style={{ ...btnS, padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 8, fontSize: 13, color: T.textMuted }}>
+            📋 Wedstrijden terugkijken
+          </button>
+        )}
 
         {/* Ingelogd als / uitloggen */}
         {loggedInTeam && (

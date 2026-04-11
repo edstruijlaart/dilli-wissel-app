@@ -8,6 +8,48 @@ export const VIEWS = { SETUP: "setup", MATCH: "match", SUMMARY: "summary" };
 // Dedup helper: verwijder duplicaten uit een array (behoud eerste voorkomen)
 const dedup = (arr) => [...new Set(arr)];
 
+// --- STATE INVARIANT: garandeert dat field en bench NOOIT overlappen ---
+// Elke speler zit in PRECIES één lijst (field, bench, of excluded). Nooit dubbel.
+function enforceInvariant(field, bench, excluded = []) {
+  const seen = new Set();
+  const cleanField = [];
+  const cleanBench = [];
+  const excludedSet = new Set(excluded);
+
+  // Field heeft prioriteit: wie op het veld staat, staat op het veld
+  for (const p of field) {
+    if (!seen.has(p) && !excludedSet.has(p)) {
+      cleanField.push(p);
+      seen.add(p);
+    }
+  }
+  // Bench: alleen spelers die NIET al op het veld staan
+  for (const p of bench) {
+    if (!seen.has(p) && !excludedSet.has(p)) {
+      cleanBench.push(p);
+      seen.add(p);
+    }
+  }
+  return { field: cleanField, bench: cleanBench };
+}
+
+// --- DEBUG LOG: capture elke state-mutatie voor post-match analyse ---
+const MAX_LOG_ENTRIES = 500;
+let matchLog = [];
+
+function logAction(action, details = {}) {
+  const entry = {
+    t: Date.now(),
+    action,
+    ...details,
+  };
+  matchLog.push(entry);
+  if (matchLog.length > MAX_LOG_ENTRIES) matchLog = matchLog.slice(-MAX_LOG_ENTRIES);
+}
+
+export function getMatchLog() { return [...matchLog]; }
+export function clearMatchLog() { matchLog = []; }
+
 /**
  * Bereken dynamisch wisselinterval zodat wisselmomenten de helft netjes vullen.
  * @param {number} halfDurationMin - Helftduur in minuten
@@ -440,9 +482,11 @@ export function useMatchState() {
   const applyServerSnapshot = useCallback((data) => {
     isAdoptingRef.current = true;
 
-    // Live match state — dedup + ensure player only in one list
-    const serverField = dedup(data.onField || []);
-    const serverBench = dedup((data.onBench || []).filter(p => !serverField.includes(p)));
+    // Live match state — enforce invariant (voorkomt dubbele spelers)
+    const { field: serverField, bench: serverBench } = enforceInvariant(
+      data.onField || [], data.onBench || [], data.excludedPlayers || []
+    );
+    logAction('applyServerSnapshot', { fieldSize: serverField.length, benchSize: serverBench.length });
     setOnField(serverField);
     setOnBench(serverBench);
     setPlayTime(data.playTime || {});
@@ -569,10 +613,12 @@ export function useMatchState() {
 
   const startMatch = () => {
     if (players.length < playersOnField) return;
+    clearMatchLog(); // Fresh log voor nieuwe wedstrijd
     const init = {}; players.forEach(p => (init[p] = 0));
     let fl, bl;
     if (keeper) { const nk = players.filter(p => p !== keeper); fl = [keeper, ...nk.slice(0, playersOnField - 1)]; bl = nk.slice(playersOnField - 1); }
     else { fl = players.slice(0, playersOnField); bl = players.slice(playersOnField); }
+    logAction('startMatch', { players: players.length, field: fl.length, bench: bl.length, keeper, halves, halfDuration });
     setOnField(fl); setOnBench(bl); setMatchKeeper(keeper);
     setPlayTime(init); setKeeperPlayTime({}); setCurrentHalf(1); setMatchTimer(0); setSubTimer(0);
     matchTimerRef.current = 0; // Reset ref zodat delta-berekening niet negatief wordt
@@ -705,6 +751,30 @@ export function useMatchState() {
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [isOnline, matchCode, view, applyServerSnapshot]);
 
+  // --- AUTO-REPAIR: detecteer en fix inconsistenties elke 5 seconden ---
+  useEffect(() => {
+    if (view !== VIEWS.MATCH || !isRunning) return;
+    const iv = setInterval(() => {
+      // Check: zit een speler in BEIDE lijsten?
+      const fieldSet = new Set(onField);
+      const overlap = onBench.filter(p => fieldSet.has(p));
+      if (overlap.length > 0) {
+        logAction('autoRepair_overlap', { overlap });
+        // Fix: verwijder uit bench (field heeft prioriteit)
+        setOnBench(prev => prev.filter(p => !fieldSet.has(p)));
+      }
+      // Check: missende spelers (niet op veld, bank, of excluded)
+      const allActive = players.filter(p => !excludedPlayers.includes(p));
+      const accounted = new Set([...onField, ...onBench]);
+      const missing = allActive.filter(p => !accounted.has(p));
+      if (missing.length > 0) {
+        logAction('autoRepair_missing', { missing });
+        setOnBench(prev => [...prev, ...missing]);
+      }
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [view, isRunning, onField, onBench, players, excludedPlayers]);
+
   // Memoize: index van volgende pending slot (voorkomt array scan elke seconde)
   const nextPendingSlotIdx = useMemo(() => subSchedule.findIndex(s => s.status === 'pending'), [subSchedule]);
 
@@ -761,8 +831,13 @@ export function useMatchState() {
       alertShownRef.current = false;
       return;
     }
-    setOnField(prev => dedup(prev.filter(p => !out.includes(p) && !inn.includes(p)).concat(inn)));
-    setOnBench(prev => dedup(prev.filter(p => !inn.includes(p) && !out.includes(p)).concat(out)));
+    // Atomic state update met invariant enforcement
+    const newField = onField.filter(p => !out.includes(p)).concat(inn);
+    const newBench = onBench.filter(p => !inn.includes(p)).concat(out);
+    const { field: safeField, bench: safeBench } = enforceInvariant(newField, newBench, excludedPlayers);
+    logAction('executeSubs', { out, inn, fieldBefore: onField.length, fieldAfter: safeField.length });
+    setOnField(safeField);
+    setOnBench(safeBench);
     setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] }]);
     // Markeer slot als executed + detecteer edits voor herberekening
     if (activeSlotIndex >= 0) {
@@ -877,12 +952,14 @@ export function useMatchState() {
       addEvent({ type: 'keeper_change', time: fmt(matchTimer), half: currentHalf, newKeeper });
     }
 
-    setOnField(newField);
-    setOnBench(newBench);
+    const { field: safeField, bench: safeBench } = enforceInvariant(newField, newBench, newExcluded);
+    logAction('excludePlayer', { player, wasOnField, fieldSize: safeField.length, benchSize: safeBench.length });
+    setOnField(safeField);
+    setOnBench(safeBench);
     setExcludedPlayers(newExcluded);
 
     // Bug Fix: als geen bankspelers meer → sluit alert en leeg schema
-    if (newBench.length === 0) {
+    if (safeBench.length === 0) {
       if (showSubAlert) {
         setShowSubAlert(false);
         alertShownRef.current = false;
@@ -895,12 +972,12 @@ export function useMatchState() {
     }
 
     // Schema herberekenen met nieuwe speler-pool + dynamisch interval herberekenen
-    const newInterval = calculateDynamicInterval(halfDuration, newBench.length);
+    const newInterval = calculateDynamicInterval(halfDuration, safeBench.length);
     setSubInterval(newInterval);
     setSubSchedule(prev => {
       const recalc = recalculateRemainingSlots(
         prev, getPivotIndex(prev, activeSlotIndex),
-        newField, newBench, playTime, newKeeper, halfDuration, halves, newInterval, newExcluded,
+        safeField, safeBench, playTime, newKeeper, halfDuration, halves, newInterval, newExcluded,
         keeperRotation, keeperQueue
       );
       setScheduleVersion(v => v + 1);
@@ -921,7 +998,13 @@ export function useMatchState() {
   };
 
   const startNextHalf = () => {
+    // BOUNDS CHECK: voorkom dat we voorbij het aantal helften gaan
+    if (currentHalf >= halves) {
+      logAction('startNextHalf_blocked', { currentHalf, halves });
+      return;
+    }
     const nextHalf = currentHalf + 1;
+    logAction('startNextHalf', { from: currentHalf, to: nextHalf });
     // Snap timer naar helftgrens: voorkom dat overgeschoten blessuretijd
     // de half-end detection triggert voor de nieuwe helft
     const expectedStart = currentHalf * halfDuration * 60;
@@ -954,10 +1037,14 @@ export function useMatchState() {
         } else if (isOnBenchNow) {
           // Bankspeler → keeper: fysieke wissel met huidige keeper
           const oldKeeper = matchKeeper;
-          setOnField(prev => prev.map(p => p === oldKeeper ? nextKeeper : p));
-          setOnBench(prev => prev.map(p => p === nextKeeper ? oldKeeper : p));
+          const newFieldArr = onField.map(p => p === oldKeeper ? nextKeeper : p);
+          const newBenchArr = onBench.map(p => p === nextKeeper ? oldKeeper : p);
+          const { field: safeField, bench: safeBench } = enforceInvariant(newFieldArr, newBenchArr, excludedPlayers);
+          setOnField(safeField);
+          setOnBench(safeBench);
           setMatchKeeper(nextKeeper);
           activeKeeper = nextKeeper;
+          logAction('keeperRotation_swap', { oldKeeper, nextKeeper });
           // Positie overnemen
           if (playersOnField >= 7) {
             setPlayerPositions(prev => {
@@ -983,10 +1070,17 @@ export function useMatchState() {
 
   const manualSub = (fp, bp) => {
     // Validatie: speler moet daadwerkelijk op veld resp. bank staan
-    if (!onField.includes(fp) || !onBench.includes(bp)) return;
+    if (!onField.includes(fp) || !onBench.includes(bp)) {
+      logAction('manualSub_blocked', { fp, bp, fpOnField: onField.includes(fp), bpOnBench: onBench.includes(bp) });
+      return;
+    }
     const wasKeeper = fp === matchKeeper;
-    setOnField(onField.map(p => (p === fp ? bp : p)));
-    setOnBench(onBench.map(p => (p === bp ? fp : p)));
+    const newFieldArr = onField.map(p => (p === fp ? bp : p));
+    const newBenchArr = onBench.map(p => (p === bp ? fp : p));
+    const { field: safeField, bench: safeBench } = enforceInvariant(newFieldArr, newBenchArr, excludedPlayers);
+    logAction('manualSub', { out: fp, inn: bp });
+    setOnField(safeField);
+    setOnBench(safeBench);
     if (wasKeeper) setMatchKeeper(bp);
     // Veld-view: inkomende speler erft positie van uitgaande
     if (playersOnField >= 7) {
@@ -1004,8 +1098,12 @@ export function useMatchState() {
     const fromBench = onBench.includes(newKeeper);
     if (fromBench) {
       const oldKeeper = matchKeeper;
-      setOnField(onField.map(p => (p === oldKeeper ? newKeeper : p)));
-      setOnBench(onBench.map(p => (p === newKeeper ? oldKeeper : p)));
+      const newFieldArr = onField.map(p => (p === oldKeeper ? newKeeper : p));
+      const newBenchArr = onBench.map(p => (p === newKeeper ? oldKeeper : p));
+      const { field: safeField, bench: safeBench } = enforceInvariant(newFieldArr, newBenchArr, excludedPlayers);
+      logAction('swapKeeper', { oldKeeper, newKeeper, fromBench: true });
+      setOnField(safeField);
+      setOnBench(safeBench);
       setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [oldKeeper], inn: [newKeeper], keeperChange: true, newKeeper }]);
     } else {
       setSubHistory(h => [...h, { time: fmt(matchTimer), half: currentHalf, out: [], inn: [], keeperChange: true, newKeeper }]);
@@ -1150,13 +1248,48 @@ export function useMatchState() {
     }
   }, [applyServerSnapshot]);
 
+  // --- STATE REPAIR: herstel consistentie wanneer state corrupt is ---
+  const repairState = useCallback(() => {
+    const allActive = players.filter(p => !excludedPlayers.includes(p));
+    const { field: safeField, bench: safeBench } = enforceInvariant(onField, onBench, excludedPlayers);
+
+    // Check of er spelers missen (niet op veld, niet op bank, niet excluded)
+    const accounted = new Set([...safeField, ...safeBench, ...excludedPlayers]);
+    const missing = allActive.filter(p => !accounted.has(p));
+
+    // Missende spelers naar de bank
+    const finalBench = [...safeBench, ...missing];
+
+    // Check of veld te veel spelers heeft
+    let finalField = safeField;
+    if (safeField.length > playersOnField) {
+      // Overtollige spelers naar bank (keeper beschermd)
+      const excess = safeField.filter(p => p !== matchKeeper).slice(playersOnField - 1);
+      finalField = safeField.filter(p => !excess.includes(p));
+      finalBench.push(...excess);
+    }
+
+    logAction('repairState', {
+      hadDuplicates: safeField.length !== onField.length || safeBench.length !== onBench.length,
+      missingPlayers: missing,
+      fieldBefore: onField.length, fieldAfter: finalField.length,
+      benchBefore: onBench.length, benchAfter: finalBench.length,
+    });
+
+    setOnField(finalField);
+    setOnBench(finalBench);
+    addEvent({ type: 'state_repair', time: fmt(matchTimer), half: currentHalf });
+    syncToServer();
+    return { repaired: true, fixed: missing.length > 0 || safeField.length !== onField.length };
+  }, [players, excludedPlayers, onField, onBench, playersOnField, matchKeeper, matchTimer, currentHalf, addEvent, syncToServer]);
+
   // Wedstrijd definitief beëindigen → naar samenvatting
   const finalizeMatch = useCallback(() => {
     setPendingEnd(false);
     setView(VIEWS.SUMMARY);
   }, []);
 
-  // Wedstrijd opslaan in team historie
+  // Wedstrijd opslaan in team historie (inclusief debug log)
   const saveMatchToHistory = useCallback(async () => {
     const teamName = team || homeTeam || '';
     if (!teamName) return false;
@@ -1169,6 +1302,8 @@ export function useMatchState() {
           match: {
             homeTeam, awayTeam, homeScore, awayScore,
             playTime, goalScorers, subHistory, events,
+            excludedPlayers, players, halves, halfDuration,
+            matchLog: getMatchLog(),
           },
         }),
       });
@@ -1177,7 +1312,7 @@ export function useMatchState() {
     } catch {
       return false;
     }
-  }, [team, homeTeam, awayTeam, homeScore, awayScore, playTime, goalScorers, subHistory, events]);
+  }, [team, homeTeam, awayTeam, homeScore, awayScore, playTime, goalScorers, subHistory, events, excludedPlayers, players, halves, halfDuration]);
 
   return {
     // Setup state
@@ -1217,5 +1352,7 @@ export function useMatchState() {
     addPlayer, removePlayer, movePlayer, toggleKeeper,
     startMatch, startTimer, executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf,
     manualSub, swapKeeper, setIsRunning, calculateSubs,
+    // Repair + Debug
+    repairState,
   };
 }

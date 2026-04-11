@@ -8,9 +8,10 @@ import SummaryView from './views/SummaryView';
 import ViewerView from './views/ViewerView';
 import AdminView from './views/AdminView';
 import SecretariaatView from './views/SecretariaatView';
+import HistoryView from './views/HistoryView';
 
-// App modes: HOME → SETUP → MATCH → SUMMARY  |  VIEWER | ADMIN | SECRETARIAAT
-const MODES = { HOME: 'home', SETUP: 'setup', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer', ADMIN: 'admin', SECRETARIAAT: 'secretariaat' };
+// App modes: HOME → SETUP → MATCH → SUMMARY  |  VIEWER | ADMIN | SECRETARIAAT | HISTORY
+const MODES = { HOME: 'home', SETUP: 'setup', MATCH: 'match', SUMMARY: 'summary', VIEWER: 'viewer', ADMIN: 'admin', SECRETARIAAT: 'secretariaat', HISTORY: 'history' };
 
 const SESSION_KEY = 'dilli_active_match';
 
@@ -167,6 +168,13 @@ export default function App() {
     }
   };
 
+  const [historyTeam, setHistoryTeam] = useState(null);
+
+  const handleViewHistory = (teamName) => {
+    setHistoryTeam(teamName);
+    setMode(MODES.HISTORY);
+  };
+
   const handleNewMatch = () => {
     state.setView(VIEWS.SETUP);
     state.setGoalScorers({});
@@ -198,6 +206,7 @@ export default function App() {
           onStartLocal={handleStartLocal}
           onJoin={handleJoin}
           onJoinAsCoach={handleJoinAsCoach}
+          onViewHistory={handleViewHistory}
         />
       )}
       {mode === MODES.SETUP && (
@@ -217,6 +226,9 @@ export default function App() {
       )}
       {mode === MODES.SECRETARIAAT && (
         <SecretariaatView onBack={goHome} />
+      )}
+      {mode === MODES.HISTORY && (
+        <HistoryView team={historyTeam} onBack={goHome} />
       )}
     </>
   );

@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     const existing = await redis.get(key);
     const history = Array.isArray(existing) ? existing : [];
 
-    // Voeg nieuwe wedstrijd toe (nieuwste eerst)
+    // Voeg nieuwe wedstrijd toe (nieuwste eerst) — volledige data voor terugkijken
     const entry = {
       id: `m_${Date.now()}`,
       date: new Date().toISOString(),
@@ -24,9 +24,13 @@ export default async function handler(req, res) {
       playTime: match.playTime || {},
       goalScorers: match.goalScorers || {},
       subCount: (match.subHistory || []).length,
-      events: (match.events || []).filter(e =>
-        ['goal_home', 'goal_away', 'yellow_card', 'red_card'].includes(e.type)
-      ),
+      subHistory: match.subHistory || [],
+      events: match.events || [],
+      excludedPlayers: match.excludedPlayers || [],
+      players: match.players || [],
+      halves: match.halves || 2,
+      halfDuration: match.halfDuration || 20,
+      matchLog: match.matchLog || [],
     };
 
     history.unshift(entry);
