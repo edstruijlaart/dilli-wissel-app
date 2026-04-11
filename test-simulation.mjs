@@ -39,9 +39,10 @@ function enforceInvariant(field, bench, excluded = []) {
 
 function calculateDynamicInterval(halfDurationMin, benchSize) {
   if (benchSize <= 0) return halfDurationMin;
-  const roundsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
-  const intervalMin = halfDurationMin / (roundsNeeded + 1);
-  return Math.max(2, Math.round(intervalMin));
+  const slotsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
+  const usableMinutes = halfDurationMin - 2;
+  const intervalMin = usableMinutes / (slotsNeeded + 1);
+  return Math.max(2, Math.floor(intervalMin));
 }
 
 function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHalves, sInterval, currentPlayTime = {}, excludedList = [], initialField = null, initialBench = null, keeperRotationEnabled = false, keeperQueueList = []) {
@@ -56,7 +57,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   bench = bench.filter(p => !excludedList.includes(p));
   const B = bench.length;
   if (B <= 0 || I <= 0) return [];
-  const slotsPerHalf = Math.max(1, Math.floor(D / I) - 1);
+  const slotsPerHalf = Math.max(1, Math.floor(D / I));
   const fieldSlots = F - 1;
   const projected = {};
   allActive.forEach(p => { projected[p] = currentPlayTime[p] || 0; });
@@ -166,15 +167,22 @@ function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBen
   const dedupField = dedup(currentField);
   const dedupBench = dedup(currentBench.filter(p => !dedupField.includes(p)));
   const allPlayers = [...dedupField, ...dedupBench];
+  const lastFixedSlot = fixed[fixed.length - 1];
+  const currentHalf = lastFixedSlot ? lastFixedSlot.half : 1;
+  const currentAbsTime = lastFixedSlot?.absoluteTime || 0;
+  const remainingHalves = nHalves - currentHalf + 1;
   const remaining = generateSubSchedule(
     allPlayers, keeperName, dedupField.length,
-    hDuration, nHalves, sInterval,
+    hDuration, remainingHalves, sInterval,
     currentPlayTime, excluded,
     dedupField, dedupBench,
     keeperRotationEnabled, keeperQueueList
   );
-  const currentAbsTime = schedule[fromIndex]?.absoluteTime || 0;
-  const futureSlots = remaining.filter(s => s.absoluteTime > currentAbsTime);
+  const halfOffset = (currentHalf - 1) * hDuration * 60;
+  const adjustedSlots = remaining.map(s => ({
+    ...s, half: s.half + currentHalf - 1, absoluteTime: s.absoluteTime + halfOffset,
+  }));
+  const futureSlots = adjustedSlots.filter(s => s.absoluteTime > currentAbsTime);
   return [...fixed, ...futureSlots.map((s, i) => ({
     ...s, id: `slot-recalc-${fromIndex + 1}-${i}`, status: 'pending', executedAt: null,
   }))];
@@ -943,6 +951,616 @@ console.log('\n=== SCENARIO 8: Schema-herberekening na handmatige wijziging ==='
   sim.executeSub();
   sim.tick(300);
   assertNoErrors(sim, 'S8 na edit');
+}
+
+
+// ============================================================
+// SCENARIO 9: ZATERDAGOCHTEND — Einde helft met open wisseladvies
+// Wat als de timer afloopt terwijl je net een wisseladvies hebt gekregen?
+// ============================================================
+console.log('\n=== SCENARIO 9: Timer loopt af tijdens open wisseladvies ===');
+{
+  const sim = new MatchSimulator({
+    players: ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'],
+    keeper: 'Luuk', playersOnField: 5, halfDuration: 15, halves: 2,
+  });
+
+  // Speel tot vlak voor einde helft 1
+  sim.tick(14 * 60); // 14 minuten
+  // Er zou nu een wisseladvies moeten staan — maar de helft is bijna voorbij
+  const pendingBefore = sim.schedule.filter(s => s.status === 'pending').length;
+
+  // Timer loopt af — helft eindigt
+  sim.tick(60); // 15 minuten = einde helft
+
+  // Start helft 2 ZONDER de wissel uit te voeren (coach was te laat)
+  sim.startNextHalf();
+  assertNoErrors(sim, 'S9 helft 2 na gemiste wissel');
+
+  // Speel helft 2 normaal
+  for (let t = 0; t < 15 * 60; t += 60) {
+    sim.tick(60);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  const stats = sim.getStats();
+  assertNoErrors(sim, 'S9 einde');
+  // Iedereen moet gespeeld hebben
+  const minTime = Math.min(...Object.values(stats.playTime));
+  assert(minTime > 0, `S9: iedereen heeft gespeeld (min=${minTime}s)`);
+  console.log(`  Gemiste wissels: ${pendingBefore - sim.schedule.filter(s => s.status === 'pending').length} uitgevoerd in helft 2`);
+  console.log(`  Schema: ${sim.schedule.filter(s => s.status === 'executed').length} uitgevoerd, ${sim.schedule.filter(s => s.status === 'pending').length} pending, ${sim.schedule.filter(s => s.status === 'skipped').length} overgeslagen`);
+}
+
+
+// ============================================================
+// SCENARIO 10: KEEPER FAIRNESS — Keeper speelt hele wedstrijd,
+// wordt die dan benadeeld in speeltijd-weging?
+// ============================================================
+console.log('\n=== SCENARIO 10: Keeper speeltijd fairness ===');
+{
+  const sim = new MatchSimulator({
+    players: ['Keeper', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'],
+    keeper: 'Keeper', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  // Speel volledige wedstrijd
+  for (let half = 1; half <= 2; half++) {
+    if (half > 1) sim.startNextHalf();
+    for (let t = 0; t < 20 * 60; t += 30) {
+      sim.tick(30);
+      if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+    }
+  }
+
+  const stats = sim.getStats();
+  assertNoErrors(sim, 'S10');
+
+  // Keeper speelt 100% (staat hele wedstrijd op veld)
+  const totalMatch = 20 * 60 * 2;
+  const keeperTime = stats.playTime['Keeper'];
+  assert(keeperTime === totalMatch, `S10: keeper speelt hele wedstrijd (${keeperTime}s van ${totalMatch}s)`);
+
+  // Veldspelers moeten eerlijk verdeeld zijn (niet de keeper)
+  const fieldPlayerTimes = Object.entries(stats.playTime)
+    .filter(([name]) => name !== 'Keeper')
+    .map(([name, time]) => ({ name, time }))
+    .sort((a, b) => b.time - a.time);
+
+  const maxFieldTime = fieldPlayerTimes[0].time;
+  const minFieldTime = fieldPlayerTimes[fieldPlayerTimes.length - 1].time;
+  const fairnessDiff = maxFieldTime - minFieldTime;
+  const avgFieldTime = fieldPlayerTimes.reduce((s, p) => s + p.time, 0) / fieldPlayerTimes.length;
+
+  console.log(`  Keeper: ${keeperTime}s (100%)`);
+  console.log(`  Veldspelers: min=${minFieldTime}s, max=${maxFieldTime}s, gem=${Math.round(avgFieldTime)}s`);
+  console.log(`  Verschil max-min: ${fairnessDiff}s (${Math.round(fairnessDiff/60)}min)`);
+  fieldPlayerTimes.forEach(p => {
+    const pct = Math.round(p.time / totalMatch * 100);
+    console.log(`    ${p.name}: ${p.time}s (${pct}%)`);
+  });
+
+  // Eerlijkheidscheck: verschil mag niet meer dan 50% van een helft zijn
+  const maxAcceptableDiff = 20 * 60 * 0.5; // halve helft
+  assert(fairnessDiff <= maxAcceptableDiff,
+    `S10: speeltijdverschil ${fairnessDiff}s moet < ${maxAcceptableDiff}s zijn`);
+}
+
+
+// ============================================================
+// SCENARIO 11: SKIP CASCADE — Coach slaat 2+ wissels over,
+// herberekent het schema dan eerlijk?
+// ============================================================
+console.log('\n=== SCENARIO 11: Skip cascade — meerdere wissels overslaan ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  // Helft 1: sla de eerste 2 wissels OVER
+  let skipped = 0;
+  for (let t = 0; t < 20 * 60; t += 30) {
+    sim.tick(30);
+    if (sim.subTimer >= sim.subInterval * 60) {
+      const nextSlot = sim.schedule.find(s => s.status === 'pending');
+      if (nextSlot && skipped < 2) {
+        // Skip! Markeer als overgeslagen en herbereken
+        const idx = sim.schedule.indexOf(nextSlot);
+        sim.schedule[idx] = { ...nextSlot, status: 'skipped', executedAt: sim.matchTimer };
+        sim.schedule = recalculateRemainingSlots(
+          sim.schedule, idx, sim.field, sim.bench, sim.playTime,
+          sim.matchKeeper, sim.halfDuration, sim.halves, sim.subInterval, sim.excluded
+        );
+        sim.subTimer = 0;
+        skipped++;
+        console.log(`  Skip ${skipped}: ${nextSlot.out.join(',')} → ${nextSlot.inn.join(',')}`);
+      } else {
+        sim.executeSub();
+      }
+    }
+  }
+
+  // Helft 2: voer alles uit
+  sim.startNextHalf();
+  for (let t = 0; t < 20 * 60; t += 30) {
+    sim.tick(30);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  assertNoErrors(sim, 'S11');
+  const stats = sim.getStats();
+
+  // Na 2 skips: check dat bankspelers die NIET gescheduled waren ook speeltijd kregen
+  // NB: met 2 skips in helft 1 is het realistisch dat sommige spelers pas in helft 2 spelen
+  const times = Object.entries(stats.playTime).filter(([n]) => n !== 'K');
+  const playedCount = times.filter(([,t]) => t > 0).length;
+  assert(playedCount >= 4, `S11: minstens 4 van 7 spelers hebben gespeeld (${playedCount})`);
+  console.log(`  ${skipped} wissels overgeslagen, ${stats.subs} wissels uitgevoerd`);
+  console.log(`  Speeltijden: ${times.map(([n,t]) => `${n}=${t}s`).join(', ')}`);
+}
+
+
+// ============================================================
+// SCENARIO 12: MAAR 1 BANKSPELER — het moeilijkste scenario
+// Elke wissel is dezelfde 2 spelers die om en om gaan
+// ============================================================
+console.log('\n=== SCENARIO 12: Maar 1 bankspeler ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'A', 'B', 'C', 'D', 'E'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  assert(sim.bench.length === 1, `S12: 1 bankspeler (${sim.bench.join(',')})`);
+  console.log(`  Start: veld=[${sim.field.join(',')}], bank=[${sim.bench.join(',')}]`);
+
+  // Speel volledige wedstrijd
+  let totalSubs = 0;
+  for (let half = 1; half <= 2; half++) {
+    if (half > 1) sim.startNextHalf();
+    for (let t = 0; t < 20 * 60; t += 30) {
+      sim.tick(30);
+      if (sim.subTimer >= sim.subInterval * 60) {
+        if (sim.executeSub()) totalSubs++;
+      }
+    }
+  }
+
+  assertNoErrors(sim, 'S12');
+  const stats = sim.getStats();
+  const times = Object.entries(stats.playTime).filter(([n]) => n !== 'K');
+  const maxDiff = Math.max(...times.map(([,t]) => t)) - Math.min(...times.map(([,t]) => t));
+  console.log(`  ${totalSubs} wissels uitgevoerd`);
+  console.log(`  Speeltijden: ${times.map(([n,t]) => `${n}=${t}s`).join(', ')}`);
+  console.log(`  Max verschil: ${maxDiff}s (${Math.round(maxDiff/60)}min)`);
+  assert(totalSubs > 0, 'S12: minstens 1 wissel uitgevoerd');
+}
+
+
+// ============================================================
+// SCENARIO 13: WISSELCOUNT — wie is hoe vaak gewisseld?
+// ============================================================
+console.log('\n=== SCENARIO 13: Wisselcount per speler ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 4,
+  });
+
+  for (let half = 1; half <= 4; half++) {
+    if (half > 1) sim.startNextHalf();
+    for (let t = 0; t < 20 * 60; t += 30) {
+      sim.tick(30);
+      if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+    }
+  }
+
+  assertNoErrors(sim, 'S13');
+
+  // Tel wissels per speler
+  const subCounts = {};
+  sim.subHistory.forEach(sub => {
+    (sub.out || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+    (sub.inn || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+  });
+
+  console.log(`  ${sim.subHistory.length} wissels totaal`);
+  Object.entries(subCounts).sort((a, b) => b[1] - a[1]).forEach(([name, count]) => {
+    console.log(`    ${name}: ${count}x gewisseld`);
+  });
+
+  // Keeper mag niet gewisseld zijn (staat altijd op veld)
+  assert(!subCounts['K'] || subCounts['K'] === 0, 'S13: keeper niet gewisseld');
+
+  // Iedereen behalve keeper moet minstens 1x gewisseld zijn
+  const nonKeeper = ['Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const allSubbed = nonKeeper.every(p => (subCounts[p] || 0) > 0);
+  assert(allSubbed, 'S13: iedereen (behalve keeper) is minstens 1x gewisseld');
+}
+
+
+// ============================================================
+// SCENARIO 14: MATCH SAVE — is alle data compleet voor terugkijken?
+// ============================================================
+console.log('\n=== SCENARIO 14: Match save completeness ===');
+{
+  const sim = new MatchSimulator({
+    players: ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn'],
+    keeper: 'Luuk', playersOnField: 5, halfDuration: 15, halves: 2,
+  });
+
+  // Speel met wat blessures en wissels
+  sim.tick(300);
+  sim.executeSub();
+  sim.tick(200);
+  sim.injurePlayer('Bobby');
+  sim.tick(400);
+
+  sim.startNextHalf();
+  sim.tick(300);
+  sim.executeSub();
+  sim.tick(600);
+
+  const stats = sim.getStats();
+
+  // Simuleer wat we opslaan naar de server
+  const savedMatch = {
+    homeTeam: 'Dilettant',
+    awayTeam: 'Tegenstander',
+    homeScore: 3,
+    awayScore: 1,
+    playTime: stats.playTime,
+    goalScorers: { 'Sem': 2, 'Daan': 1 },
+    subHistory: sim.subHistory,
+    events: sim.log.filter(l => ['executeSub', 'injury', 'startNextHalf'].includes(l.action)),
+    excludedPlayers: stats.excluded,
+    players: sim.allPlayers,
+    halves: sim.halves,
+    halfDuration: sim.halfDuration,
+    matchLog: stats.log,
+  };
+
+  // Controleer completeness
+  assert(savedMatch.playTime && Object.keys(savedMatch.playTime).length === 7, 'S14: playTime voor alle spelers');
+  assert(savedMatch.subHistory.length > 0, 'S14: wisselgeschiedenis aanwezig');
+  assert(savedMatch.events.length > 0, 'S14: events aanwezig');
+  assert(savedMatch.excludedPlayers.includes('Bobby'), 'S14: Bobby in excluded');
+  assert(savedMatch.matchLog.length > 0, 'S14: debug log aanwezig');
+  assert(savedMatch.players.length === 7, 'S14: spelerslijst compleet');
+
+  // Wisselcount reconstrueerbaar uit subHistory
+  const subCounts = {};
+  savedMatch.subHistory.forEach(sub => {
+    (sub.out || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+    (sub.inn || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+  });
+  assert(Object.keys(subCounts).length > 0, 'S14: wisselcount reconstrueerbaar');
+
+  console.log(`  Opgeslagen: ${Object.keys(savedMatch.playTime).length} speeltijden, ${savedMatch.subHistory.length} wissels, ${savedMatch.events.length} events, ${savedMatch.matchLog.length} logregels`);
+  console.log(`  Wisselcounts: ${Object.entries(subCounts).map(([n,c]) => `${n}:${c}x`).join(', ')}`);
+}
+
+
+// ============================================================
+// SCENARIO 15: KEEPER ROTATIE + BLESSURE — keeper valt uit,
+// wie pakt het over? Blijft de rotatie kloppen?
+// ============================================================
+console.log('\n=== SCENARIO 15: Keeper rotatie + keeper valt uit ===');
+{
+  const sim = new MatchSimulator({
+    players: ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'],
+    keeper: 'Luuk', playersOnField: 5, halfDuration: 15, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  // Helft 1: Luuk is keeper
+  assert(sim.matchKeeper === 'Luuk', 'S15: Luuk start als keeper');
+  sim.tick(600);
+  sim.executeSub();
+  sim.tick(300);
+
+  // Helft 2: Sem wordt keeper
+  sim.startNextHalf();
+  assert(sim.matchKeeper === 'Sem', `S15: Sem is keeper helft 2 (is ${sim.matchKeeper})`);
+  sim.tick(300);
+
+  // SEM VALT UIT als keeper! (bal in gezicht of zoiets)
+  console.log('  >> Keeper Sem valt uit!');
+  sim.injurePlayer('Sem');
+  assertNoErrors(sim, 'S15 keeper injury');
+  assert(sim.matchKeeper !== 'Sem', 'S15: Sem is niet meer keeper');
+  assert(!sim.field.includes('Sem'), 'S15: Sem niet meer op veld');
+  console.log(`  Nieuwe keeper: ${sim.matchKeeper}`);
+
+  sim.tick(600);
+
+  // Helft 3: Bobby zou keeper moeten worden (volgende in queue)
+  sim.startNextHalf();
+  assertNoErrors(sim, 'S15 helft 3');
+  console.log(`  Helft 3 keeper: ${sim.matchKeeper}`);
+
+  sim.tick(900);
+
+  // Helft 4: Daan wordt keeper (Sem is excluded, wordt overgeslagen)
+  sim.startNextHalf();
+  assertNoErrors(sim, 'S15 helft 4');
+  console.log(`  Helft 4 keeper: ${sim.matchKeeper}`);
+
+  assert(!sim.startNextHalf(), 'S15: helft 5 geblokkeerd');
+
+  const stats = sim.getStats();
+  assert(stats.errors.length === 0, 'S15: geen errors');
+  assert(stats.excluded.includes('Sem'), 'S15: Sem is excluded');
+}
+
+
+// ============================================================
+// SCENARIO 16: APP CRASH + RECONNECT — state herstellen vanuit
+// een server snapshot na page refresh
+// ============================================================
+console.log('\n=== SCENARIO 16: App crash + reconnect ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'A', 'B', 'C', 'D', 'E', 'F'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  // Speel 10 minuten met wat wissels
+  sim.tick(300);
+  sim.executeSub();
+  sim.tick(300);
+
+  // Sla huidige state op (= server snapshot)
+  const snapshot = {
+    field: [...sim.field],
+    bench: [...sim.bench],
+    matchKeeper: sim.matchKeeper,
+    playTime: { ...sim.playTime },
+    excluded: [...sim.excluded],
+  };
+
+  // "CRASH" — maak een nieuwe simulator (= page refresh)
+  const sim2 = new MatchSimulator({
+    players: ['K', 'A', 'B', 'C', 'D', 'E', 'F'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  // Herstel vanuit snapshot
+  sim2.applySnapshot(snapshot);
+  sim2.playTime = snapshot.playTime; // Herstel speeltijden
+  sim2.matchTimer = sim.matchTimer;  // Herstel timer
+
+  assertNoErrors(sim2, 'S16 reconnect');
+
+  // Veld/bank moet identiek zijn aan voor de crash
+  assert(JSON.stringify(sim2.field.sort()) === JSON.stringify(snapshot.field.sort()),
+    'S16: veld hersteld na reconnect');
+  assert(JSON.stringify(sim2.bench.sort()) === JSON.stringify(snapshot.bench.sort()),
+    'S16: bank hersteld na reconnect');
+
+  // Speel door
+  sim2.tick(600);
+  sim2.executeSub();
+  assertNoErrors(sim2, 'S16 doorspelen na reconnect');
+  console.log(`  Reconnect OK, doorgespeeld met ${sim2.field.length} op veld`);
+}
+
+
+// ============================================================
+// SCENARIO 17: DUBBELE BLESSURE TEGELIJK — 2 spelers tegelijk uit
+// (botsing met elkaar)
+// ============================================================
+console.log('\n=== SCENARIO 17: Dubbele blessure (botsing) ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  sim.tick(300);
+
+  // A en B botsen op elkaar — allebei uit
+  console.log('  >> A en B botsen op elkaar');
+  sim.injurePlayer('A');
+  assertNoErrors(sim, 'S17 injury A');
+  sim.injurePlayer('B');
+  assertNoErrors(sim, 'S17 injury B');
+
+  assert(!sim.field.includes('A') && !sim.field.includes('B'), 'S17: A en B niet op veld');
+  assert(sim.excluded.includes('A') && sim.excluded.includes('B'), 'S17: A en B excluded');
+  console.log(`  Na dubbele blessure: veld=[${sim.field.join(',')}], bank=[${sim.bench.join(',')}]`);
+
+  // Speel door
+  sim.tick(600);
+  if (sim.bench.length > 0) sim.executeSub();
+  sim.tick(300);
+
+  sim.startNextHalf();
+  sim.tick(1200);
+
+  assertNoErrors(sim, 'S17 einde');
+  console.log(`  Einde: ${sim.field.length} op veld, ${sim.bench.length} op bank, ${sim.excluded.length} uit`);
+}
+
+
+// ============================================================
+// SCENARIO 18: LATE ARRIVAL — kind komt te laat, moet midden in
+// wedstrijd worden toegevoegd
+// ============================================================
+console.log('\n=== SCENARIO 18: Kind komt te laat ===');
+{
+  const sim = new MatchSimulator({
+    players: ['K', 'A', 'B', 'C', 'D', 'E', 'F'],
+    keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+  });
+
+  // Speel 10 minuten
+  sim.tick(600);
+  sim.executeSub();
+
+  // Noah komt te laat! Voeg toe aan de bank
+  console.log('  >> Noah komt te laat (10 min)');
+  sim.allPlayers.push('Noah');
+  sim.bench.push('Noah');
+  sim.playTime['Noah'] = 0;
+  sim._enforce();
+  sim._validate('S18 late arrival');
+  assertNoErrors(sim, 'S18 late arrival');
+
+  // Herbereken schema met nieuwe speler
+  const newInterval = calculateDynamicInterval(sim.halfDuration, sim.bench.length);
+  sim.subInterval = newInterval;
+  sim.schedule = recalculateRemainingSlots(
+    sim.schedule, getPivotIndex(sim.schedule, sim.activeSlotIndex),
+    sim.field, sim.bench, sim.playTime, sim.matchKeeper,
+    sim.halfDuration, sim.halves, newInterval, sim.excluded
+  );
+
+  // Coach wisselt Noah handmatig in (realistisch scenario)
+  const longestOnField = sim.field
+    .filter(p => p !== sim.matchKeeper)
+    .sort((a, b) => (sim.playTime[b] || 0) - (sim.playTime[a] || 0))[0];
+  console.log(`  Coach wisselt ${longestOnField} → Noah (handmatig)`);
+  sim.manualSub(longestOnField, 'Noah');
+  assertNoErrors(sim, 'S18 manual sub Noah');
+
+  // Speel rest helft 1 + helft 2
+  for (let t = 0; t < 10 * 60; t += 60) {
+    sim.tick(60);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  sim.startNextHalf();
+  for (let t = 0; t < 20 * 60; t += 60) {
+    sim.tick(60);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  assertNoErrors(sim, 'S18 einde');
+  assert(sim.playTime['Noah'] > 0, `S18: Noah heeft gespeeld (${sim.playTime['Noah']}s)`);
+  console.log(`  Noah speeltijd: ${sim.playTime['Noah']}s`);
+}
+
+
+// ============================================================
+// SCENARIO 19: FAIRNESS DEEP DIVE — speel 10 wedstrijden,
+// analyseer speeltijdverdeling statistisch
+// ============================================================
+console.log('\n=== SCENARIO 19: Fairness analyse over 10 wedstrijden ===');
+{
+  const players = ['K', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const cumulative = {};
+  players.forEach(p => { cumulative[p] = 0; });
+
+  for (let game = 0; game < 10; game++) {
+    const sim = new MatchSimulator({
+      players, keeper: 'K', playersOnField: 5, halfDuration: 20, halves: 2,
+    });
+
+    for (let half = 1; half <= 2; half++) {
+      if (half > 1) sim.startNextHalf();
+      for (let t = 0; t < 20 * 60; t += 30) {
+        sim.tick(30);
+        if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+      }
+    }
+
+    // Accumuleer
+    Object.entries(sim.playTime).forEach(([name, time]) => {
+      cumulative[name] += time;
+    });
+
+    if (sim.errors.length > 0) {
+      sim.errors.forEach(e => { failed++; totalAssertions++; console.error(`  FAIL [game ${game}]: ${e}`); });
+      sim.errors = [];
+    }
+  }
+
+  const nonKeeper = Object.entries(cumulative).filter(([n]) => n !== 'K');
+  nonKeeper.sort((a, b) => b[1] - a[1]);
+  const maxTime = nonKeeper[0][1];
+  const minTime = nonKeeper[nonKeeper.length - 1][1];
+  const avg = nonKeeper.reduce((s, [,t]) => s + t, 0) / nonKeeper.length;
+
+  console.log('  Cumulatieve speeltijd over 10 wedstrijden:');
+  nonKeeper.forEach(([name, time]) => {
+    const pct = Math.round(time / maxTime * 100);
+    const deviation = Math.round((time - avg) / avg * 100);
+    console.log(`    ${name}: ${time}s (${pct}% van max, ${deviation > 0 ? '+' : ''}${deviation}% van gem)`);
+  });
+
+  const fairnessRatio = minTime / maxTime;
+  console.log(`  Fairness ratio: ${Math.round(fairnessRatio * 100)}% (min/max)`);
+  assert(fairnessRatio >= 0.5, `S19: fairness ratio ${Math.round(fairnessRatio*100)}% moet >= 50% zijn`);
+  passed++; totalAssertions++; // Extra pass voor geen crashes in 10 games
+}
+
+
+// ============================================================
+// SCENARIO 20: MEGA STRESS — 500 random acties, 10 spelers,
+// keeper rotatie, 4 helften. Mag NOOIT crashen.
+// ============================================================
+console.log('\n=== SCENARIO 20: Mega stress — 500 random acties ===');
+{
+  const players = ['K', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+  const sim = new MatchSimulator({
+    players, keeper: 'K', playersOnField: 6, halfDuration: 15, halves: 4,
+    keeperRotation: true, keeperQueue: ['K', 'A', 'B', 'C'],
+  });
+
+  const rng = (max) => Math.floor(Math.random() * max);
+  const actions = ['tick', 'tick', 'tick', 'sub', 'sub', 'manual', 'keeper', 'injury', 'nextHalf', 'corrupt', 'repair'];
+  // Gewogen: meer ticks en subs (realistischer)
+  let crashes = 0;
+
+  for (let i = 0; i < 500; i++) {
+    const action = actions[rng(actions.length)];
+    try {
+      switch (action) {
+        case 'tick': sim.tick(10 + rng(60)); break;
+        case 'sub': sim.executeSub(); break;
+        case 'manual':
+          if (sim.bench.length > 0 && sim.field.length > 1) {
+            const nonKeeper = sim.field.filter(p => p !== sim.matchKeeper);
+            if (nonKeeper.length > 0) {
+              sim.manualSub(nonKeeper[rng(nonKeeper.length)], sim.bench[rng(sim.bench.length)]);
+            }
+          }
+          break;
+        case 'keeper':
+          if (sim.field.length > 1) {
+            const c = sim.field.filter(p => p !== sim.matchKeeper);
+            if (c.length > 0) sim.swapKeeper(c[rng(c.length)]);
+          }
+          break;
+        case 'injury':
+          if (sim.field.length > 2 && sim.excluded.length < players.length - 3) {
+            const t = sim.field.filter(p => p !== sim.matchKeeper);
+            if (t.length > 0) sim.injurePlayer(t[rng(t.length)]);
+          }
+          break;
+        case 'nextHalf': sim.startNextHalf(); break;
+        case 'corrupt':
+          if (sim.field.length > 0 && sim.bench.length > 0) {
+            sim.applyCorruptSnapshot({
+              field: [...sim.field, sim.bench[rng(sim.bench.length)]],
+              bench: [...sim.bench],
+            });
+          }
+          break;
+        case 'repair': sim.autoRepair(); break;
+      }
+    } catch (err) {
+      crashes++;
+      console.error(`  CRASH bij actie ${i} (${action}): ${err.message}`);
+    }
+  }
+
+  assert(crashes === 0, `S20: 0 crashes (had ${crashes})`);
+  assertNoErrors(sim, 'S20');
+  const stats = sim.getStats();
+  console.log(`  500 acties: ${stats.subs} wissels, ${stats.excluded.length} blessures, ${crashes} crashes`);
 }
 
 

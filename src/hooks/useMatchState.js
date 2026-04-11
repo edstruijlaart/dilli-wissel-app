@@ -58,11 +58,17 @@ export function clearMatchLog() { matchLog = []; }
  */
 function calculateDynamicInterval(halfDurationMin, benchSize) {
   if (benchSize <= 0) return halfDurationMin;
-  // Benodigde wisselrondes: eerste ronde wisselt max 2, rest 1
-  const roundsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
-  // Verdeel helft gelijkmatig: interval = helftduur / (rondes + 1)
-  const intervalMin = halfDurationMin / (roundsNeeded + 1);
-  return Math.max(2, Math.round(intervalMin));
+  // Doel: elke bankspeler minstens 1x het veld in per helft.
+  // Eerste slot wisselt max 2 tegelijk, daarna 1 per slot.
+  // slotsNeeded = plekken die vrijkomen: slot1=2 spelers, rest=1 speler
+  const slotsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
+  // Verdeel de bruikbare helft gelijkmatig
+  // Buffer: 2 minuten aan einde (geen wissel in laatste 2 min)
+  const usableMinutes = halfDurationMin - 2;
+  // Interval = bruikbare tijd / (slots + 1), +1 zodat er ruimte voor en na zit
+  const intervalMin = usableMinutes / (slotsNeeded + 1);
+  // Minimaal 2 minuten, afronden naar beneden voor meer wisselmomenten
+  return Math.max(2, Math.floor(intervalMin));
 }
 
 // Pivot index voor schema herberekening: vind startpunt voor recalculate
@@ -105,7 +111,10 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   const B = bench.length;
   if (B <= 0 || I <= 0) return [];
 
-  const slotsPerHalf = Math.max(1, Math.floor(D / I) - 1);
+  // Aantal mogelijke wisselmomenten per helft.
+  // De MIN_BEFORE_END check in de slotTimes loop filtert al te late slots,
+  // dus geen extra -1 aftrekken hier.
+  const slotsPerHalf = Math.max(1, Math.floor(D / I));
   const fieldSlots = F - 1; // veldplekken excl. keeper
 
   // Track "felt" speeltijd: veldtijd + keepertijd × 0.5
@@ -280,18 +289,34 @@ function recalculateRemainingSlots(schedule, fromIndex, currentField, currentBen
   const dedupBench = dedup(currentBench.filter(p => !dedupField.includes(p)));
   const allPlayers = [...dedupField, ...dedupBench];
 
-  // Genereer nieuw schema met actuele speeltijden en veld/bank bezetting
+  // Bepaal huidige helft uit het schema (voor correcte startpositie)
+  const lastFixedSlot = fixed[fixed.length - 1];
+  const currentHalf = lastFixedSlot ? lastFixedSlot.half : 1;
+  const currentAbsTime = lastFixedSlot?.absoluteTime || 0;
+
+  // Genereer schema alleen voor RESTERENDE helften (niet opnieuw van helft 1)
+  // Dit voorkomt dat het schema helft 1 opnieuw simuleert met verkeerde state
+  const remainingHalves = nHalves - currentHalf + 1;
+
   const remaining = generateSubSchedule(
     allPlayers, keeperName, dedupField.length,
-    hDuration, nHalves, sInterval,
+    hDuration, remainingHalves, sInterval,
     currentPlayTime, excluded,
     dedupField, dedupBench,
     keeperRotationEnabled, keeperQueueList
   );
 
-  // Filter: alleen slots die NA het huidige absolute moment vallen
-  const currentAbsTime = schedule[fromIndex]?.absoluteTime || 0;
-  const futureSlots = remaining.filter(s => s.absoluteTime > currentAbsTime);
+  // Corrigeer absoluteTime: schema denkt dat het bij helft 1 start,
+  // maar we zijn eigenlijk bij currentHalf
+  const halfOffset = (currentHalf - 1) * hDuration * 60;
+  const adjustedSlots = remaining.map(s => ({
+    ...s,
+    half: s.half + currentHalf - 1,
+    absoluteTime: s.absoluteTime + halfOffset,
+  }));
+
+  // Filter: alleen slots die NA het huidige punt vallen
+  const futureSlots = adjustedSlots.filter(s => s.absoluteTime > currentAbsTime);
 
   // Merge: fixed + herberekende future slots
   return [...fixed, ...futureSlots.map((s, i) => ({
