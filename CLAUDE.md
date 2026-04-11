@@ -7,7 +7,7 @@ eerlijke speeltijdverdeling tijdens wedstrijden. Ouders, opa's en oma's kunnen l
 meekijken via een deelbare 4-letter code: score, timer, wissels, audio-updates en foto's.
 
 **Eigenaar**: Ed Struijlaart
-**Status**: Actief productie — v3.36.0
+**Status**: Actief productie — v3.40.1
 **URL**: https://dilli.edstruijlaart.nl
 **Vercel project**: `ed-struijlaarts-projects/dilli-wissel-app`
 
@@ -69,7 +69,8 @@ dilli-wissel-app/
 │   └── match/
 │       ├── create.js            # POST: wedstrijd aanmaken, 4-letter code genereren
 │       ├── live.js              # GET: live wedstrijden overzicht (voor HomeView)
-│       ├── save.js              # POST: wedstrijd opslaan in historie (permanent KV, max 100/team)
+│       ├── save.js              # POST: wedstrijd opslaan in historie (permanent KV, max 100/team, incl. debug log)
+│       ├── history.js           # GET: opgeslagen wedstrijden ophalen per team
 │       ├── [code].js            # GET/PUT: match state + server-side coach push checks
 │       ├── events/
 │       │   └── [code].js        # GET/POST: event log + viewer push bij goals/wissels/einde
@@ -82,7 +83,7 @@ dilli-wissel-app/
     ├── main.jsx                  # React root mount
     ├── version.js                # VERSION constante — update bij elke release!
     ├── sw.js                     # Custom Service Worker: push + notificationclick + Workbox precaching
-    ├── App.jsx                   # Hoofd router: HomeView | SetupView | MatchView | SummaryView | ViewerView | AdminView | SecretariaatView
+    ├── App.jsx                   # Hoofd router: HomeView | SetupView | MatchView | SummaryView | ViewerView | AdminView | SecretariaatView | HistoryView
     ├── theme.js                  # Design tokens: kleuren, card, btnP, btnS, btnD, mono
     │
     ├── data/
@@ -161,7 +162,8 @@ dilli-wissel-app/
         │                         #   schema-adherence stats (uitgevoerd/overgeslagen/%),
         │                         #   excluded players, wedstrijd opslaan
         ├── AdminView.jsx         # Admin panel: wedstrijden + teams beheren
-        └── SecretariaatView.jsx  # Secretariaat: programma (VoetbalAssist), live wedstrijden, kleedkamers
+        ├── SecretariaatView.jsx  # Secretariaat: programma (VoetbalAssist), live wedstrijden, kleedkamers
+        └── HistoryView.jsx      # Wedstrijden terugkijken: speeltijden, wissels, events, debug log
 ```
 
 ---
@@ -176,17 +178,25 @@ dilli-wissel-app/
   - Coach: wisseladvies, rust, einde wedstrijd, blessuretijd voorbij (server-side timer detection)
   - Kijker: goals, wissels, rust, einde wedstrijd, foto's (event-triggered)
   - iOS: installatie-prompt voor PWA (push vereist homescreen installatie)
-- **Wisselalgoritme** (v3.18.0): pre-berekend wisselschema voor maximale eerlijke speeltijd
+- **Wisselalgoritme** (v3.18.0, major refactor v3.38-3.40): pre-berekend wisselschema voor maximale eerlijke speeltijd
   - `generateSubSchedule()` berekent volledig schema bij match start over alle helften
-  - `subsPerSlot = max(1, min(B, min(fieldSlots, round(B*I/D))))` — optimaal aantal wissels per moment
+  - **State invariant** (v3.38.0): `enforceInvariant()` garandeert na elke mutatie dat geen speler dubbel staat
+  - **Auto-repair** (v3.38.0): elke 5s check op inconsistenties, automatische correctie
+  - **Keeper bescherming** (v3.38.1): keeper kan nooit via auto-wissel van het veld
+  - **Kwartstart-wissel** (v3.40.0): bankspelers die lang wachten worden direct bij kwartstart gewisseld
+  - **Geoptimaliseerd interval** (v3.40.0): korte kwarten (<=12min) krijgen minstens 3 wisselmomenten
+  - **Random shuffle** (v3.40.1): spelerslijst wordt bij start gehusseld — eerlijke bank-verdeling
+  - **Debug log**: elke state-mutatie wordt gelogd en mee-opgeslagen met wedstrijd
+  - **Repair knop**: verschijnt automatisch bij inconsistente state
   - Editable sub alert: coach kan wisselparen aanpassen via dropdowns (met duplicate prevention)
   - Latency-compensatie: `subTimer` start op overshoot waarde, niet op 0
-  - Schema herberekening bij: skip, blessure, edit, keeper-swap
+  - Schema herberekening bij: skip, blessure, edit, keeper-swap (alleen resterende helften, niet opnieuw vanaf begin)
   - Skip-waarschuwing na 2+ overgeslagen wissels
-  - Wisselschema preview: inklapbaar overzicht met status icons (✅ ⏭️ 🔄 ⏳)
+  - Wisselschema preview: inklapbaar overzicht met status icons
   - Blessure/Uitsluiting: speler mid-match uit pool halen, auto-vervanging + schema herberekening
   - Schema-adherence statistieken in SummaryView (uitgevoerd/overgeslagen/percentage)
   - Handmatig tap-to-sub blijft beschikbaar naast schema
+  - **Simulatie-getest**: 374 tests, 200 willekeurige wedstrijden, 0 crashes, 0 state errors
 - **Multi-coach sync**: meerdere coaches delen dezelfde wedstrijd, server is single source of truth.
   Coaches pollen elke 3s, adopteren wijzigingen van andere coaches (score, wissels, helft, timer).
   Anti-echo guards (`_coachId` + `isAdoptingRef`) voorkomen sync-loops.
@@ -204,6 +214,11 @@ dilli-wissel-app/
   - Formatie wisselen tijdens wedstrijd, positie-overdracht bij wissel
   - Keeper apart gemarkeerd, doelpuntenmakers met ⚽ indicator
   - Admin: mode toggle, formatie dropdown, rugnummer inputs per team
+- **Match history** (v3.38.0): wedstrijden terugkijken via HomeView knop
+  - Opslaat: speeltijden, wisselgeschiedenis, events, debug log, excluded spelers
+  - HistoryView: per wedstrijd score, speeltijden (met balken), wissels, events, optioneel debug log
+  - API: `/api/match/history?team=X` (GET) + `/api/match/save` (POST, uitgebreide data)
+  - Max 100 wedstrijden per team in Vercel KV (permanent, geen TTL)
 
 ### Kijker
 - **Live volgen**: score, timer, veld/bank bezetting via polling (5s interval)
@@ -336,6 +351,10 @@ mono    // JetBrains Mono font stijl
 | Situatie | Oplossing |
 |----------|-----------|
 | Service worker cached oude versie | Hard refresh (Cmd+Shift+R) of PWA herinstalleren |
+| Speler op veld EN bank (v3.38.0 fix) | `enforceInvariant()` voorkomt dit nu. Repair knop verschijnt automatisch. Auto-repair elke 5s. |
+| Kwart start niet (v3.38.0 fix) | Bounds check in `startNextHalf()`: kan niet voorbij geconfigureerde helften. |
+| Keeper gewisseld via auto-wissel (v3.38.1 fix) | `executeSubs()` blokkeert keeper in out-lijst. |
+| Schema klopt niet na blessure (v3.39.0 fix) | `recalculateRemainingSlots()` herberekent alleen resterende helften met actuele state. |
 | `addEvent` undefined | Controleer return statement van `useMatchState.js` — alle exports moeten er in staan |
 | Foto upload mislukt | Controleer BLOB2_READ_WRITE_TOKEN in Vercel env vars |
 | Audio message niet zichtbaar | Blob metadata via `addMetadata` — check of `blob.metadata?.message` beschikbaar is in list() |
