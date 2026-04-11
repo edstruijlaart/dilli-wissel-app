@@ -489,6 +489,11 @@ export function useMatchState() {
     logAction('applyServerSnapshot', { fieldSize: serverField.length, benchSize: serverBench.length });
     setOnField(serverField);
     setOnBench(serverBench);
+    // Keeper bescherming: als keeper niet meer op veld staat, herstel
+    const snapshotKeeper = data.matchKeeper || data.keeper;
+    if (snapshotKeeper && !serverField.includes(snapshotKeeper) && serverField.length > 0) {
+      logAction('applyServerSnapshot_keeperRecovered', { lostKeeper: snapshotKeeper, newKeeper: serverField[0] });
+    }
     setPlayTime(data.playTime || {});
     if (data.keeperPlayTime) setKeeperPlayTime(data.keeperPlayTime);
     setHomeScore(data.homeScore || 0);
@@ -824,12 +829,23 @@ export function useMatchState() {
   }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper, nextPendingSlotIdx]);
 
   const executeSubs = () => {
-    const { out, inn } = suggestedSubs;
+    let { out, inn } = suggestedSubs;
     // Guard: voorkom stille no-op als suggestedSubs leeg is (race condition met multi-coach sync)
     if (out.length === 0 || inn.length === 0) {
       setShowSubAlert(false);
       alertShownRef.current = false;
       return;
+    }
+    // KEEPER BESCHERMING: keeper mag nooit via auto-wissel van het veld
+    if (matchKeeper && out.includes(matchKeeper)) {
+      logAction('executeSubs_keeperProtected', { removedFromOut: matchKeeper });
+      out = out.filter(p => p !== matchKeeper);
+      inn = inn.slice(0, out.length); // Houd paren gelijk
+      if (out.length === 0 || inn.length === 0) {
+        setShowSubAlert(false);
+        alertShownRef.current = false;
+        return;
+      }
     }
     // Atomic state update met invariant enforcement
     const newField = onField.filter(p => !out.includes(p)).concat(inn);
@@ -1075,6 +1091,8 @@ export function useMatchState() {
       return;
     }
     const wasKeeper = fp === matchKeeper;
+    // Bij keeper wissel: nieuw speler erft keeper-rol (niet naar bank sturen!)
+    // Dit is correct gedrag — keeper draagt rol over aan inkomende speler
     const newFieldArr = onField.map(p => (p === fp ? bp : p));
     const newBenchArr = onBench.map(p => (p === bp ? fp : p));
     const { field: safeField, bench: safeBench } = enforceInvariant(newFieldArr, newBenchArr, excludedPlayers);
