@@ -42,6 +42,11 @@ function calculateDynamicInterval(halfDurationMin, benchSize) {
   const slotsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
   const usableMinutes = halfDurationMin - 2;
   const intervalMin = usableMinutes / (slotsNeeded + 1);
+  if (halfDurationMin <= 12) {
+    const targetSlots = Math.max(slotsNeeded + 1, 3);
+    const shortInterval = usableMinutes / targetSlots;
+    return Math.max(2, Math.floor(shortInterval));
+  }
   return Math.max(2, Math.floor(intervalMin));
 }
 
@@ -58,6 +63,7 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
   const B = bench.length;
   if (B <= 0 || I <= 0) return [];
   const slotsPerHalf = Math.max(1, Math.floor(D / I));
+  // (kwartstart-wissel zit in slotTimes generatie hieronder)
   const fieldSlots = F - 1;
   const projected = {};
   allActive.forEach(p => { projected[p] = currentPlayTime[p] || 0; });
@@ -102,9 +108,12 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
     let isFirstSlotOfHalf = true;
     const slotTimes = [];
     const MIN_BEFORE_END = 120;
+    // Kwartstart-wissel voor lang wachtende bankspelers
+    const longWaiters = bench.filter(p => (benchWait[p] || 0) >= 2);
+    if (half > 1 && longWaiters.length > 0) slotTimes.push(30);
     for (let s = 1; s <= slotsPerHalf; s++) {
       const t = s * I;
-      if (t <= D - MIN_BEFORE_END) slotTimes.push(t);
+      if (t <= D - MIN_BEFORE_END && t > 30) slotTimes.push(t);
     }
     let prevSlotTime = 0;
     for (const slotTime of slotTimes) {
@@ -1561,6 +1570,544 @@ console.log('\n=== SCENARIO 20: Mega stress — 500 random acties ===');
   assertNoErrors(sim, 'S20');
   const stats = sim.getStats();
   console.log(`  500 acties: ${stats.subs} wissels, ${stats.excluded.length} blessures, ${crashes} crashes`);
+}
+
+
+// ============================================================
+// ============================================================
+//
+//   BOBBY-SCENARIO'S
+//   Dilettant JO9: 4x10 min, 6 op veld, 7-8 spelers totaal
+//
+// ============================================================
+// ============================================================
+
+// Helper: speel een volledige Bobby-wedstrijd en return stats
+function playBobbyMatch(sim, opts = {}) {
+  const { earlyEndHalves = [], skipSubs = [] } = opts;
+  const halfSec = sim.halfDuration * 60;
+
+  for (let half = 1; half <= sim.halves; half++) {
+    if (half > 1) sim.startNextHalf();
+
+    const earlyEnd = earlyEndHalves.includes(half);
+    const duration = earlyEnd ? Math.floor(halfSec * 0.7) : halfSec; // 70% als kwart eerder stopt
+
+    for (let t = 0; t < duration; t += 15) {
+      sim.tick(15);
+      if (sim.subTimer >= sim.subInterval * 60) {
+        if (skipSubs.includes(sim.subHistory.length)) {
+          // Skip deze wissel
+          const slot = sim.schedule.find(s => s.status === 'pending');
+          if (slot) {
+            const idx = sim.schedule.indexOf(slot);
+            sim.schedule[idx] = { ...slot, status: 'skipped', executedAt: sim.matchTimer };
+            sim.schedule = recalculateRemainingSlots(
+              sim.schedule, idx, sim.field, sim.bench, sim.playTime,
+              sim.matchKeeper, sim.halfDuration, sim.halves, sim.subInterval, sim.excluded
+            );
+            sim.subTimer = 0;
+          }
+        } else {
+          sim.executeSub();
+        }
+      }
+    }
+  }
+
+  const stats = sim.getStats();
+  const nonKeeper = Object.entries(stats.playTime)
+    .filter(([n]) => n !== sim.matchKeeper && !sim.excluded.includes(n))
+    .map(([n, t]) => ({ name: n, time: t }))
+    .sort((a, b) => b.time - a.time);
+  const max = nonKeeper[0]?.time || 0;
+  const min = nonKeeper[nonKeeper.length - 1]?.time || 0;
+
+  // Wisselcount
+  const subCounts = {};
+  sim.subHistory.forEach(sub => {
+    (sub.out || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+    (sub.inn || []).forEach(p => { subCounts[p] = (subCounts[p] || 0) + 1; });
+  });
+
+  return { stats, nonKeeper, max, min, diff: max - min, subCounts };
+}
+
+function printFairness(label, result, sim) {
+  console.log(`  ${label}:`);
+  console.log(`    ${sim.subHistory.length} wissels, verschil ${Math.round(result.diff/60)}min`);
+  result.nonKeeper.forEach(p => {
+    const pct = Math.round(p.time / (sim.halfDuration * sim.halves * 60) * 100);
+    const sc = result.subCounts[p.name] || 0;
+    console.log(`      ${p.name.padEnd(8)} ${String(p.time).padStart(4)}s (${String(pct).padStart(2)}%)  ${sc}x gewisseld`);
+  });
+}
+
+
+// ============================================================
+// BOBBY 1: Standaard JO9 — 4x10, 8 spelers, 6 op veld, 2 op bank
+// Keeper roulatie: elk kwart andere keeper
+// ============================================================
+console.log('\n=== BOBBY 1: Standaard JO9 wedstrijd (4x10, 8 spelers, keeper rotatie) ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  console.log(`  Schema: ${sim.schedule.length} slots, interval: ${sim.subInterval}min`);
+  const result = playBobbyMatch(sim);
+  assertNoErrors(sim, 'Bobby 1');
+  printFairness('Eindstand', result, sim);
+
+  // Check: iedereen heeft gespeeld
+  assert(result.min > 0, `B1: iedereen gespeeld (min=${result.min}s)`);
+  // Check: verschil acceptabel (max 1 kwart verschil)
+  assert(result.diff <= 10 * 60, `B1: verschil ${result.diff}s <= 600s (1 kwart)`);
+}
+
+
+// ============================================================
+// BOBBY 2: 7 spelers (1 op bank) — het minimale scenario
+// ============================================================
+console.log('\n=== BOBBY 2: 7 spelers, 1 op bank (4x10) ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  console.log(`  Schema: ${sim.schedule.length} slots, interval: ${sim.subInterval}min`);
+  const result = playBobbyMatch(sim);
+  assertNoErrors(sim, 'Bobby 2');
+  printFairness('Eindstand', result, sim);
+
+  assert(result.min > 0, `B2: iedereen gespeeld (min=${result.min}s)`);
+}
+
+
+// ============================================================
+// BOBBY 3: Blessure in kwart 2 — van 2 op bank naar 1
+// ============================================================
+console.log('\n=== BOBBY 3: Blessure in kwart 2 (van 2 naar 1 op bank) ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  // Kwart 1 normaal
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+  assertNoErrors(sim, 'B3 kwart 1');
+
+  // Kwart 2: Noud krijgt bal tegen hoofd bij 3 minuten
+  sim.startNextHalf();
+  sim.tick(180);
+  console.log('  >> Noud: bal tegen hoofd in kwart 2');
+  sim.injurePlayer('Noud');
+  assertNoErrors(sim, 'B3 injury');
+  console.log(`  Nu: ${sim.field.length} veld, ${sim.bench.length} bank, ${sim.excluded.length} uit`);
+
+  // Speel rest kwart 2 + kwart 3 + kwart 4
+  for (let t = 180; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+  for (let half = 3; half <= 4; half++) {
+    sim.startNextHalf();
+    for (let t = 0; t < 10 * 60; t += 15) {
+      sim.tick(15);
+      if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+    }
+  }
+
+  assertNoErrors(sim, 'B3 einde');
+  const stats = sim.getStats();
+  const active = Object.entries(stats.playTime)
+    .filter(([n]) => !sim.excluded.includes(n))
+    .map(([n, t]) => ({ name: n, time: t }))
+    .sort((a, b) => b.time - a.time);
+  const min = active[active.length - 1].time;
+  console.log(`  Speeltijden na blessure:`);
+  active.forEach(p => console.log(`    ${p.name.padEnd(8)} ${p.time}s`));
+  assert(min > 0, `B3: iedereen (behalve Noud) heeft gespeeld (min=${min}s)`);
+}
+
+
+// ============================================================
+// BOBBY 4: Keeper rotatie stopt halverwege
+// Kwart 1: Luuk keeper, Kwart 2: Sem keeper
+// Dan besluit coach: Sem blijft keeper kwart 3 en 4 (geen rotatie meer)
+// ============================================================
+console.log('\n=== BOBBY 4: Keeper rotatie stopt halverwege ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  // Kwart 1: Luuk keeper (normaal)
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+  console.log(`  Kwart 1: keeper=${sim.matchKeeper}`);
+
+  // Kwart 2: Sem keeper (normaal via rotatie)
+  sim.startNextHalf();
+  console.log(`  Kwart 2: keeper=${sim.matchKeeper}`);
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  // Coach zet rotatie UIT — Sem blijft keeper
+  console.log('  >> Coach zet keeper rotatie uit. Sem blijft keeper.');
+  sim.keeperRotation = false;
+
+  // Kwart 3: Sem blijft keeper (GEEN Bobby)
+  sim.startNextHalf();
+  assert(sim.matchKeeper === 'Sem', `B4: Sem nog steeds keeper in kwart 3 (is ${sim.matchKeeper})`);
+  console.log(`  Kwart 3: keeper=${sim.matchKeeper}`);
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  // Kwart 4: nog steeds Sem
+  sim.startNextHalf();
+  assert(sim.matchKeeper === 'Sem', `B4: Sem keeper in kwart 4 (is ${sim.matchKeeper})`);
+  console.log(`  Kwart 4: keeper=${sim.matchKeeper}`);
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  assertNoErrors(sim, 'B4 einde');
+  console.log(`  ${sim.subHistory.length} wissels uitgevoerd`);
+}
+
+
+// ============================================================
+// BOBBY 5: Kwart wordt eerder afgefloten
+// Kwart 3 stopt na 7 min i.p.v. 10 (scheids fluit af)
+// ============================================================
+console.log('\n=== BOBBY 5: Kwart eerder afgefloten ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  // Kwart 1+2 normaal
+  for (let half = 1; half <= 2; half++) {
+    if (half > 1) sim.startNextHalf();
+    for (let t = 0; t < 10 * 60; t += 15) {
+      sim.tick(15);
+      if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+    }
+  }
+
+  // Kwart 3: stopt na 7 min (scheids fluit)
+  sim.startNextHalf();
+  console.log(`  Kwart 3 start: keeper=${sim.matchKeeper}`);
+  for (let t = 0; t < 7 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+  console.log('  >> Scheids fluit kwart 3 af na 7 min');
+  // Coach moet handmatig naar kwart 4 (forceEndHalf equivalent)
+
+  // Kwart 4 normaal
+  sim.startNextHalf();
+  assertNoErrors(sim, 'B5 kwart 4 start na vroeg einde');
+  console.log(`  Kwart 4 start: keeper=${sim.matchKeeper}`);
+  for (let t = 0; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+
+  assertNoErrors(sim, 'B5 einde');
+  const stats = sim.getStats();
+  console.log(`  ${sim.subHistory.length} wissels, ${stats.excluded.length} uitgevallen`);
+}
+
+
+// ============================================================
+// BOBBY 6: Keeper wissel MID-KWART + blessure op dezelfde speler
+// Luuk is keeper, wordt gewisseld voor Daan, dan raakt Luuk
+// (nu veldspeler) geblesseerd
+// ============================================================
+console.log('\n=== BOBBY 6: Keeper wissel + blessure op ex-keeper ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+  });
+
+  // Kwart 1: speel 4 min
+  sim.tick(240);
+  sim.executeSub();
+
+  // Wissel keeper: Luuk → Daan (Daan staat op veld)
+  console.log('  >> Keeper wissel: Luuk → Daan');
+  sim.swapKeeper('Daan');
+  assertNoErrors(sim, 'B6 keeper swap');
+  assert(sim.matchKeeper === 'Daan', 'B6: Daan is keeper');
+
+  sim.tick(60);
+
+  // Luuk (nu veldspeler) raakt geblesseerd
+  console.log('  >> Luuk (ex-keeper, nu veldspeler) raakt geblesseerd');
+  sim.injurePlayer('Luuk');
+  assertNoErrors(sim, 'B6 injury Luuk');
+  assert(!sim.field.includes('Luuk'), 'B6: Luuk niet op veld');
+  assert(sim.matchKeeper === 'Daan', 'B6: Daan nog steeds keeper');
+  console.log(`  Veld: [${sim.field.join(',')}], keeper=${sim.matchKeeper}`);
+
+  // Speel rest wedstrijd
+  for (let t = 300; t < 10 * 60; t += 15) {
+    sim.tick(15);
+    if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+  }
+  for (let half = 2; half <= 4; half++) {
+    sim.startNextHalf();
+    for (let t = 0; t < 10 * 60; t += 15) {
+      sim.tick(15);
+      if (sim.subTimer >= sim.subInterval * 60) sim.executeSub();
+    }
+  }
+
+  assertNoErrors(sim, 'B6 einde');
+}
+
+
+// ============================================================
+// BOBBY 7: CHAOS — het scenario van vandaag
+// 8 spelers, 4x10, keeper rotatie.
+// Kwart 1: wissel + keeper wissel mid-kwart
+// Kwart 2: bal tegen hoofd → blessure
+// Kwart 3: coach slaat wissel over, handmatige wissel
+// Kwart 4: nog een blessure, eerder afgefloten
+// ============================================================
+console.log('\n=== BOBBY 7: CHAOS — het complete zaterdagochtend scenario ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  console.log(`  Start: ${sim.field.length} veld, ${sim.bench.length} bank`);
+
+  // === KWART 1 ===
+  sim.tick(180); // 3 min
+  sim.executeSub();
+  sim.tick(60);
+
+  // Coach wisselt keeper halverwege kwart 1 (Luuk → Morris, veldspeler)
+  console.log('  K1 >> Keeper wissel: Luuk → Morris');
+  sim.swapKeeper('Morris');
+  assertNoErrors(sim, 'B7 K1 keeper swap');
+
+  sim.tick(360); // rest kwart 1
+
+  // === KWART 2 === (Sem zou keeper worden via rotatie)
+  sim.startNextHalf();
+  console.log(`  K2 start: keeper=${sim.matchKeeper}, veld=[${sim.field.join(',')}]`);
+  sim.tick(120);
+  sim.executeSub();
+  sim.tick(60);
+
+  // BAL TEGEN HOOFD — Thijs eruit
+  console.log('  K2 >> Thijs: bal tegen hoofd');
+  sim.injurePlayer('Thijs');
+  assertNoErrors(sim, 'B7 K2 injury');
+  console.log(`  K2: ${sim.field.length} veld, ${sim.bench.length} bank`);
+
+  sim.tick(420); // rest kwart 2
+
+  // === KWART 3 === (Bobby zou keeper worden)
+  sim.startNextHalf();
+  console.log(`  K3 start: keeper=${sim.matchKeeper}, veld=[${sim.field.join(',')}]`);
+  sim.tick(180);
+
+  // Coach slaat wisseladvies over
+  const pendingSlot = sim.schedule.find(s => s.status === 'pending');
+  if (pendingSlot) {
+    console.log('  K3 >> Coach slaat wissel over');
+    const idx = sim.schedule.indexOf(pendingSlot);
+    sim.schedule[idx] = { ...pendingSlot, status: 'skipped', executedAt: sim.matchTimer };
+    sim.schedule = recalculateRemainingSlots(
+      sim.schedule, idx, sim.field, sim.bench, sim.playTime,
+      sim.matchKeeper, sim.halfDuration, sim.halves, sim.subInterval, sim.excluded,
+      sim.keeperRotation, sim.keeperQueue
+    );
+    sim.subTimer = 0;
+  }
+
+  sim.tick(120);
+
+  // Handmatige wissel: coach kiest zelf
+  if (sim.bench.length > 0) {
+    const fp = sim.field.filter(p => p !== sim.matchKeeper).sort((a,b) => (sim.playTime[b]||0) - (sim.playTime[a]||0))[0];
+    const bp = sim.bench[0];
+    if (fp && bp) {
+      console.log(`  K3 >> Handmatige wissel: ${fp} → ${bp}`);
+      sim.manualSub(fp, bp);
+    }
+  }
+
+  sim.tick(300); // rest kwart 3
+
+  // === KWART 4 === (Daan zou keeper worden)
+  sim.startNextHalf();
+  console.log(`  K4 start: keeper=${sim.matchKeeper}, veld=[${sim.field.join(',')}]`);
+  sim.tick(180);
+  sim.executeSub();
+  sim.tick(60);
+
+  // NOG EEN BLESSURE — Finn botst
+  if (sim.field.includes('Finn') && !sim.excluded.includes('Finn')) {
+    console.log('  K4 >> Finn: botsing');
+    sim.injurePlayer('Finn');
+    assertNoErrors(sim, 'B7 K4 injury');
+  }
+
+  // Scheids fluit af na 8 min
+  sim.tick(180);
+  console.log('  K4 >> Scheids fluit af na 8 min');
+
+  // EINDRESULTAAT
+  assertNoErrors(sim, 'B7 einde');
+  assert(!sim.startNextHalf(), 'B7: geen kwart 5');
+
+  const stats = sim.getStats();
+  const active = Object.entries(stats.playTime)
+    .filter(([n]) => !sim.excluded.includes(n))
+    .map(([n, t]) => ({ name: n, time: t }))
+    .sort((a, b) => b.time - a.time);
+
+  console.log(`\n  EINDRESULTAAT:`);
+  console.log(`  ${sim.subHistory.length} wissels, ${sim.excluded.length} uitgevallen (${sim.excluded.join(', ')})`);
+  active.forEach(p => {
+    const pct = Math.round(p.time / sim.matchTimer * 100);
+    const sc = stats.log.filter(l => l.action === 'executeSub' || l.action === 'manualSub').length;
+    console.log(`    ${p.name.padEnd(8)} ${String(p.time).padStart(5)}s (${String(pct).padStart(2)}%)`);
+  });
+  const max = active[0].time;
+  const min = active[active.length - 1].time;
+  console.log(`  Verschil: ${max - min}s (${Math.round((max-min)/60)}min)`);
+
+  assert(stats.errors.length === 0, 'B7: geen state errors');
+  assert(active.every(p => p.time > 0), 'B7: iedereen (niet geblesseerd) heeft gespeeld');
+}
+
+
+// ============================================================
+// BOBBY 8: Fairness over 10 Bobby-wedstrijden
+// ============================================================
+console.log('\n=== BOBBY 8: Fairness over 10 wedstrijden (JO9 format) ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const cumulative = {};
+  const subTotals = {};
+  players.forEach(p => { cumulative[p] = 0; subTotals[p] = 0; });
+  let totalErrors = 0;
+
+  for (let game = 0; game < 10; game++) {
+    const sim = new MatchSimulator({
+      players, keeper: players[game % players.length], // Wisselende keeper per wedstrijd
+      playersOnField: 6, halfDuration: 10, halves: 4,
+      keeperRotation: true,
+      keeperQueue: [players[game % 8], players[(game+1) % 8], players[(game+2) % 8], players[(game+3) % 8]],
+    });
+
+    const result = playBobbyMatch(sim);
+    totalErrors += sim.errors.length;
+    sim.errors = [];
+
+    Object.entries(result.stats.playTime).forEach(([n, t]) => { cumulative[n] += t; });
+    Object.entries(result.subCounts).forEach(([n, c]) => { subTotals[n] += c; });
+  }
+
+  const sorted = Object.entries(cumulative).sort((a, b) => b[1] - a[1]);
+  const maxTime = sorted[0][1];
+  const minTime = sorted[sorted.length - 1][1];
+
+  console.log('  Cumulatief over 10 wedstrijden:');
+  sorted.forEach(([name, time]) => {
+    const pct = Math.round(time / maxTime * 100);
+    const subs = subTotals[name] || 0;
+    console.log(`    ${name.padEnd(8)} ${String(time).padStart(6)}s (${String(pct).padStart(3)}%)  ${subs}x gewisseld`);
+  });
+
+  const fairness = minTime / maxTime;
+  console.log(`  Fairness ratio: ${Math.round(fairness * 100)}%`);
+  assert(totalErrors === 0, `B8: geen state errors in 10 wedstrijden (had ${totalErrors})`);
+  assert(fairness >= 0.60, `B8: fairness ratio ${Math.round(fairness*100)}% moet >= 60% zijn`);
+}
+
+
+// ============================================================
+// BOBBY 9: Mega stress JO9 — 300 random acties in Bobby-format
+// ============================================================
+console.log('\n=== BOBBY 9: Stress test JO9 format (300 acties) ===');
+{
+  const players = ['Luuk', 'Sem', 'Bobby', 'Daan', 'Morris', 'Thijs', 'Finn', 'Noud'];
+  const sim = new MatchSimulator({
+    players, keeper: 'Luuk', playersOnField: 6, halfDuration: 10, halves: 4,
+    keeperRotation: true, keeperQueue: ['Luuk', 'Sem', 'Bobby', 'Daan'],
+  });
+
+  const rng = (max) => Math.floor(Math.random() * max);
+  const actions = ['tick', 'tick', 'tick', 'sub', 'sub', 'manual', 'keeper', 'injury', 'nextHalf', 'repair'];
+  let crashes = 0;
+
+  for (let i = 0; i < 300; i++) {
+    const action = actions[rng(actions.length)];
+    try {
+      switch (action) {
+        case 'tick': sim.tick(5 + rng(30)); break;
+        case 'sub': sim.executeSub(); break;
+        case 'manual':
+          if (sim.bench.length > 0 && sim.field.length > 1) {
+            const nk = sim.field.filter(p => p !== sim.matchKeeper);
+            if (nk.length > 0) sim.manualSub(nk[rng(nk.length)], sim.bench[rng(sim.bench.length)]);
+          }
+          break;
+        case 'keeper':
+          if (sim.field.length > 1) {
+            const c = sim.field.filter(p => p !== sim.matchKeeper);
+            if (c.length > 0) sim.swapKeeper(c[rng(c.length)]);
+          }
+          break;
+        case 'injury':
+          if (sim.field.length > 3 && sim.excluded.length < 3) {
+            const t = sim.field.filter(p => p !== sim.matchKeeper);
+            if (t.length > 0) sim.injurePlayer(t[rng(t.length)]);
+          }
+          break;
+        case 'nextHalf': sim.startNextHalf(); break;
+        case 'repair': sim.autoRepair(); break;
+      }
+    } catch (err) {
+      crashes++;
+      console.error(`  CRASH actie ${i} (${action}): ${err.message}`);
+    }
+  }
+
+  assert(crashes === 0, `B9: 0 crashes (had ${crashes})`);
+  assertNoErrors(sim, 'B9');
+  console.log(`  300 acties: ${sim.subHistory.length} wissels, ${sim.excluded.length} blessures, ${crashes} crashes`);
 }
 
 

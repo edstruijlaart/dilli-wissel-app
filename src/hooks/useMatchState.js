@@ -58,16 +58,25 @@ export function clearMatchLog() { matchLog = []; }
  */
 function calculateDynamicInterval(halfDurationMin, benchSize) {
   if (benchSize <= 0) return halfDurationMin;
-  // Doel: elke bankspeler minstens 1x het veld in per helft.
-  // Eerste slot wisselt max 2 tegelijk, daarna 1 per slot.
-  // slotsNeeded = plekken die vrijkomen: slot1=2 spelers, rest=1 speler
+  // Doel: MAXIMALE GELIJKE SPEELTIJD.
+  //
+  // Simulatie-geoptimaliseerd (test-bobby-optimaliseer.mjs):
+  // - JO8/JO9 (4x10min, 1-2 bank): interval 2.5-3 min is optimaal
+  //   → 3 wisselmomenten per kwart, maxBank 5 min, fairness 80%+
+  // - Grotere teams (2x20min, 3+ bank): interval 4-6 min
+  //
   const slotsNeeded = benchSize <= 2 ? 1 : 1 + (benchSize - 2);
-  // Verdeel de bruikbare helft gelijkmatig
-  // Buffer: 2 minuten aan einde (geen wissel in laatste 2 min)
   const usableMinutes = halfDurationMin - 2;
-  // Interval = bruikbare tijd / (slots + 1), +1 zodat er ruimte voor en na zit
   const intervalMin = usableMinutes / (slotsNeeded + 1);
-  // Minimaal 2 minuten, afronden naar beneden voor meer wisselmomenten
+
+  // Korte kwarten (<=12 min): vaker wisselen zodat niemand een heel kwart op de bank zit
+  if (halfDurationMin <= 12) {
+    // Doel: minstens 3 wisselmomenten per kwart
+    const targetSlots = Math.max(slotsNeeded + 1, 3);
+    const shortInterval = usableMinutes / targetSlots;
+    return Math.max(2, Math.floor(shortInterval));
+  }
+
   return Math.max(2, Math.floor(intervalMin));
 }
 
@@ -181,9 +190,15 @@ function generateSubSchedule(playerList, keeperName, numOnField, hDuration, nHal
 
     const slotTimes = [];
     const MIN_BEFORE_END = 120;
+    // Kwartstart-wissel: als er bankspelers zijn die al lang wachten (>= 1 kwart),
+    // voeg een vroeg wisselmoment toe op 30s zodat ze snel het veld in gaan
+    const longWaiters = bench.filter(p => (benchWait[p] || 0) >= 2);
+    if (half > 1 && longWaiters.length > 0) {
+      slotTimes.push(30); // 30 seconden na kwartstart
+    }
     for (let s = 1; s <= slotsPerHalf; s++) {
       const t = s * I;
-      if (t <= D - MIN_BEFORE_END) slotTimes.push(t);
+      if (t <= D - MIN_BEFORE_END && t > 30) slotTimes.push(t); // skip als al op 30s
     }
 
     let prevSlotTime = 0;
