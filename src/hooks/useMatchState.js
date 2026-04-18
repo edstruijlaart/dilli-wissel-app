@@ -792,15 +792,14 @@ export function useMatchState() {
         applyServerSnapshot(data);
       } catch { /* ignore */ }
     };
-    const iv = setInterval(poll, 3000);
-    // visibilitychange: direct pollen als scherm weer aan gaat
-    // Triggert ook checkCoachPush() op server → coach krijgt push
+    // Poll elke 1s als wissel-popup actief is (snelle sync), anders elke 3s
+    const iv = setInterval(poll, showSubAlert ? 1000 : 3000);
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') poll();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
-  }, [isOnline, matchCode, view, applyServerSnapshot]);
+  }, [isOnline, matchCode, view, applyServerSnapshot, showSubAlert]);
 
   // --- AUTO-REPAIR: detecteer en fix inconsistenties elke 5 seconden ---
   useEffect(() => {
@@ -875,6 +874,12 @@ export function useMatchState() {
   }, [matchTimer, subTimer, isRunning, isPaused, halfBreak, currentHalf, halves, halfDuration, subInterval, onField, onBench, playTime, calculateSubs, matchKeeper, nextPendingSlotIdx]);
 
   const executeSubs = () => {
+    // Guard: andere coach heeft dit slot al afgehandeld (race condition)
+    if (activeSlotIndex >= 0 && subSchedule[activeSlotIndex]?.status !== 'pending') {
+      setShowSubAlert(false);
+      alertShownRef.current = false;
+      return;
+    }
     let { out, inn } = suggestedSubs;
     // Guard: voorkom stille no-op als suggestedSubs leeg is (race condition met multi-coach sync)
     if (out.length === 0 || inn.length === 0) {
@@ -939,6 +944,11 @@ export function useMatchState() {
   };
 
   const skipSubs = () => {
+    if (activeSlotIndex >= 0 && subSchedule[activeSlotIndex]?.status !== 'pending') {
+      setShowSubAlert(false);
+      alertShownRef.current = false;
+      return;
+    }
     // Markeer slot als skipped in schema + herbereken resterende slots
     if (activeSlotIndex >= 0) {
       setSubSchedule(prev => {
