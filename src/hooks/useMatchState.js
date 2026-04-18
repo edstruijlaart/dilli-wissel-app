@@ -975,6 +975,28 @@ export function useMatchState() {
     });
   };
 
+  const returnPlayerFromExclusion = (player) => {
+    const newExcluded = excludedPlayers.filter(p => p !== player);
+    const newBench = [...onBench, player];
+    const { field: safeField, bench: safeBench } = enforceInvariant(onField, newBench, newExcluded);
+    logAction('returnPlayerFromExclusion', { player, fieldSize: safeField.length, benchSize: safeBench.length });
+    setOnField(safeField);
+    setOnBench(safeBench);
+    setExcludedPlayers(newExcluded);
+    const newInterval = calculateDynamicInterval(halfDuration, safeBench.length);
+    setSubInterval(newInterval);
+    setSubSchedule(prev => {
+      const recalc = recalculateRemainingSlots(
+        prev, getPivotIndex(prev, activeSlotIndex),
+        safeField, safeBench, playTime, matchKeeper, halfDuration, halves, newInterval, newExcluded,
+        keeperRotation, keeperQueue
+      );
+      setScheduleVersion(v => v + 1);
+      return recalc;
+    });
+    syncToServer();
+  };
+
   // Blessure/uitsluiting: speler verwijderen uit wedstrijd + schema herberekenen
   const excludePlayer = (player) => {
     const wasOnField = onField.includes(player);
@@ -1414,7 +1436,7 @@ export function useMatchState() {
     totalMatchTime,
     // Actions
     addPlayer, removePlayer, movePlayer, toggleKeeper,
-    startMatch, startTimer, executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf,
+    startMatch, startTimer, executeSubs, skipSubs, editSubProposal, excludePlayer, returnPlayerFromExclusion, forceEndHalf, startNextHalf,
     manualSub, swapKeeper, setIsRunning, calculateSubs,
     // Repair + Debug
     repairState,

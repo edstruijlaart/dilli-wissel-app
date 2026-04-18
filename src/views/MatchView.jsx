@@ -29,7 +29,7 @@ export default function MatchView({ state }) {
     matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
     subSchedule, activeSlotIndex, subsPerSlot, subHistory,
     keeperRotation, keeperQueue,
-    repairState,
+    repairState, returnPlayerFromExclusion,
   } = state;
 
   const showFieldView = playersOnField >= 7;
@@ -659,8 +659,19 @@ export default function MatchView({ state }) {
 
             {/* Uitgesloten spelers */}
             {state.excludedPlayers?.length > 0 && (
-              <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 10, background: T.dangerDim, fontSize: 12, color: T.danger, fontWeight: 600 }}>
-                🚫 Uit wedstrijd: {state.excludedPlayers.join(', ')}
+              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                {state.excludedPlayers.map(p => (
+                  <div key={p} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 10, background: T.dangerDim, border: `1px solid ${T.danger}33` }}>
+                    <span style={{ fontSize: 13, color: T.danger, fontWeight: 600 }}>🚫 {p}</span>
+                    <button onClick={() => returnPlayerFromExclusion(p)} style={{
+                      padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.accent}55`,
+                      background: "rgba(22,163,74,0.08)", color: T.accent, fontSize: 12, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "'DM Sans',sans-serif",
+                    }}>
+                      Terug
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
