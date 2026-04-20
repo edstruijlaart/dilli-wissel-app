@@ -409,6 +409,8 @@ export function useMatchState() {
   const [coachName, setCoachName] = useState("");
   const [syncError, setSyncError] = useState(null);
   const [viewers, setViewers] = useState(0);
+  const [otherCoachActive, setOtherCoachActive] = useState(false);
+  const otherCoachLastSeenRef = useRef(0);
 
   const intervalRef = useRef(null);
   const alertShownRef = useRef(false);
@@ -801,6 +803,11 @@ export function useMatchState() {
             }
           } catch { /* ignore */ }
         }
+        // Andere coach actief? Detecteer via _coachId + recente _updatedAt
+        if (data._coachId && data._coachId !== coachIdRef.current && data._updatedAt && Date.now() - data._updatedAt < 30000) {
+          otherCoachLastSeenRef.current = Date.now();
+          setOtherCoachActive(true);
+        }
         // Skip als server geen coach sync bevat (initiële create data)
         if (!data._coachId) return;
         // Skip eigen updates
@@ -820,6 +827,15 @@ export function useMatchState() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', handleVisibility); };
   }, [isOnline, matchCode, view, applyServerSnapshot, showSubAlert]);
+
+  // --- Andere coach aanwezigheid: clear na 30s inactiviteit ---
+  useEffect(() => {
+    if (!otherCoachActive) return;
+    const iv = setInterval(() => {
+      if (Date.now() - otherCoachLastSeenRef.current > 30000) setOtherCoachActive(false);
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [otherCoachActive]);
 
   // --- AUTO-REPAIR: detecteer en fix inconsistenties elke 5 seconden ---
   useEffect(() => {
@@ -1465,7 +1481,7 @@ export function useMatchState() {
     subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot,
     // Multiplayer
     matchCode, setMatchCode, isOnline, setIsOnline, syncError,
-    coachName, setCoachName, viewers, events, pendingEnd,
+    coachName, setCoachName, viewers, otherCoachActive, events, pendingEnd,
     createOnlineMatch, updateScore, reconnectToMatch, addEvent,
     finalizeMatch, saveMatchToHistory,
     // Computed

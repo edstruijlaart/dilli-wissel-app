@@ -25,7 +25,7 @@ export default function MatchView({ state }) {
     onField, onBench, playTime, setView, setIsRunning,
     executeSubs, skipSubs, editSubProposal, excludePlayer, forceEndHalf, startNextHalf, manualSub, swapKeeper, updateScore,
     matchCode, isOnline, syncError, startTimer, coachName, addEvent, calculateSubs,
-    viewers, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
+    viewers, otherCoachActive, events, players, pendingEnd, finalizeMatch, saveMatchToHistory,
     matchMode, autoSubs, playersOnField, formation, setFormation, playerPositions, updatePlayerPosition, squadNumbers,
     subSchedule, activeSlotIndex, subsPerSlot, subHistory,
     keeperRotation, keeperQueue,
@@ -160,6 +160,11 @@ export default function MatchView({ state }) {
               <DilliLogo size={20} />
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: syncError ? T.danger : T.accent }} />
               {syncError || `Live · Code: ${matchCode}`}
+              {otherCoachActive && (
+                <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4, color: T.warn, fontWeight: 700 }}>
+                  · 👤 coach actief
+                </span>
+              )}
               {viewers > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3, marginLeft: 4 }}>{Icons.eye(12, T.textMuted)} {viewers}</span>}
             </div>
             {coachName && (
