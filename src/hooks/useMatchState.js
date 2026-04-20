@@ -420,6 +420,7 @@ export function useMatchState() {
   const coachSecretRef = useRef(null); // Auth token voor write operaties
   const lastSyncTimeRef = useRef(0); // Timestamp laatste succesvolle PUT
   const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
+  const serverVersionRef = useRef(0); // Last known _serverVersion from server
   const subLatencyRef = useRef(0); // Seconden latency tussen alert en coach actie
   const halfJustStartedRef = useRef(false); // Guard: skip half-end detection na helft-overgang
   const alertDismissedAtRef = useRef(0); // Timestamp laatste lokale popup-dismissal (voor re-appearance guard)
@@ -458,6 +459,7 @@ export function useMatchState() {
     showSubAlert, suggestedSubs,
     _coachId: coachIdRef.current,
     _updatedAt: Date.now(),
+    _clientVersion: serverVersionRef.current,
   }), [view, team, coachName, homeTeam, awayTeam, homeLogo, awayLogo, players, matchKeeper, playersOnField, halfDuration, halves, subInterval, onField, onBench, homeScore, awayScore, goalScorers, currentHalf, matchTimer, subTimer, isRunning, isPaused, halfBreak, playTime, keeperPlayTime, subHistory, injuryTime, matchMode, autoSubs, formation, playerPositions, squadNumbers, keeperRotation, keeperQueue, subSchedule, activeSlotIndex, excludedPlayers, scheduleVersion, subsPerSlot, showSubAlert, suggestedSubs]);
 
   const syncToServer = useCallback(() => {
@@ -474,7 +476,16 @@ export function useMatchState() {
           headers,
           body: JSON.stringify(snapshot),
         });
+        const responseData = await res.json();
+        if (res.status === 409) {
+          // Conflict: server has a newer version — merge and retry
+          applyServerSnapshot(responseData.current);
+          if (responseData.current._serverVersion) serverVersionRef.current = responseData.current._serverVersion;
+          setTimeout(() => syncToServer(), 200);
+          return;
+        }
         if (!res.ok) throw new Error(`Sync failed: ${res.status}`);
+        if (responseData._serverVersion) serverVersionRef.current = responseData._serverVersion;
         setSyncError(null);
         lastSyncTimeRef.current = Date.now();
         // Flush pending events die eerder gefaald zijn
@@ -500,7 +511,7 @@ export function useMatchState() {
         setSyncError('Sync mislukt');
       }
     }, 300);
-  }, [isOnline, matchCode, getMatchSnapshot]);
+  }, [isOnline, matchCode, getMatchSnapshot, applyServerSnapshot]);
 
   const addEvent = useCallback(async (event) => {
     if (!isOnline || !matchCode) return;
@@ -798,6 +809,7 @@ export function useMatchState() {
         if (data._updatedAt && data._updatedAt < lastSyncTimeRef.current) return;
         // Andere coach heeft gewijzigd: adopteer
         applyServerSnapshot(data);
+        if (data._serverVersion) serverVersionRef.current = data._serverVersion;
       } catch { /* ignore */ }
     };
     // Poll elke 1s als wissel-popup actief is (snelle sync), anders elke 3s

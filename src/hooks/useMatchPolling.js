@@ -45,10 +45,12 @@ export function useMatchPolling(code) {
     fetchMatch();
     intervalRef.current = setInterval(fetchMatch, POLL_INTERVAL);
 
-    // visibilitychange: direct pollen als scherm weer aan gaat
+    // visibilitychange: debounce 800ms zodat coach sync eerst kan propageren
     // Dit triggert ook checkCoachPush() op de server → push naar coach
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') fetchMatch();
+      if (document.visibilityState === 'visible') {
+        setTimeout(fetchMatch, 800);
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
 

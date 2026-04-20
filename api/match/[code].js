@@ -71,6 +71,17 @@ export default async function handler(req, res) {
       match.code = code.toUpperCase();
       // Behoud coachSecret (client stuurt dit niet mee)
       if (existingMatch.coachSecret) match.coachSecret = existingMatch.coachSecret;
+
+      // Optimistic locking: reject stale writes
+      const existingVersion = existingMatch._serverVersion || 0;
+      if (match._clientVersion !== undefined && match._clientVersion < existingVersion) {
+        const { coachSecret: _, ...safeExisting } = existingMatch;
+        return res.status(409).json({ conflict: true, current: safeExisting });
+      }
+      // Increment server version on every write
+      match._serverVersion = existingVersion + 1;
+      delete match._clientVersion; // don't persist client-side field
+
       await redis.set(key, JSON.stringify(match), { ex: MATCH_TTL });
 
       // Track active matches voor cron-based push checks
