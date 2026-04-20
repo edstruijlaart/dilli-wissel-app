@@ -422,6 +422,8 @@ export function useMatchState() {
   const isAdoptingRef = useRef(false); // Voorkom sync-loop bij adoptie server state
   const subLatencyRef = useRef(0); // Seconden latency tussen alert en coach actie
   const halfJustStartedRef = useRef(false); // Guard: skip half-end detection na helft-overgang
+  const alertDismissedAtRef = useRef(0); // Timestamp laatste lokale popup-dismissal (voor re-appearance guard)
+  const eventPollCounterRef = useRef(0); // Throttle events-fetch tot 1x per 3 polls
   const totalMatchTime = halfDuration * halves;
 
   // --- API Sync ---
@@ -582,10 +584,13 @@ export function useMatchState() {
       setShowSubAlert(false);
       alertShownRef.current = false;
     } else if (data.showSubAlert && data.suggestedSubs) {
-      // Server heeft alert: overnemen (voor reconnect en sync)
-      setShowSubAlert(true);
-      setSuggestedSubs(data.suggestedSubs);
-      alertShownRef.current = true;
+      // Server heeft alert: overnemen — maar niet als we hem net zelf hebben weggedrukt
+      // (beschermt tegen re-appearance tijdens de 300ms sync-debounce)
+      if (Date.now() - alertDismissedAtRef.current > 1500) {
+        setShowSubAlert(true);
+        setSuggestedSubs(data.suggestedSubs);
+        alertShownRef.current = true;
+      }
     }
 
     // Anti-echo: reset na React batch update
@@ -774,14 +779,17 @@ export function useMatchState() {
         const data = await res.json();
         // Viewer count altijd updaten
         if (data.viewers !== undefined) setViewers(data.viewers);
-        // Events ophalen voor coach dashboard
-        try {
-          const evRes = await fetch(`/api/match/events/${matchCode}`);
-          if (evRes.ok) {
-            const evData = await evRes.json();
-            setEvents(evData);
-          }
-        } catch { /* ignore */ }
+        // Events ophalen voor coach dashboard — max 1x per 3 polls (throttle bij snelle popup-poll)
+        eventPollCounterRef.current += 1;
+        if (eventPollCounterRef.current % 3 === 1) {
+          try {
+            const evRes = await fetch(`/api/match/events/${matchCode}`);
+            if (evRes.ok) {
+              const evData = await evRes.json();
+              setEvents(evData);
+            }
+          } catch { /* ignore */ }
+        }
         // Skip als server geen coach sync bevat (initiële create data)
         if (!data._coachId) return;
         // Skip eigen updates
@@ -878,6 +886,7 @@ export function useMatchState() {
     if (activeSlotIndex >= 0 && subSchedule[activeSlotIndex]?.status !== 'pending') {
       setShowSubAlert(false);
       alertShownRef.current = false;
+      alertDismissedAtRef.current = Date.now();
       return;
     }
     let { out, inn } = suggestedSubs;
@@ -885,6 +894,7 @@ export function useMatchState() {
     if (out.length === 0 || inn.length === 0) {
       setShowSubAlert(false);
       alertShownRef.current = false;
+      alertDismissedAtRef.current = Date.now();
       return;
     }
     // KEEPER BESCHERMING: keeper mag nooit via auto-wissel van het veld
@@ -895,6 +905,7 @@ export function useMatchState() {
       if (out.length === 0 || inn.length === 0) {
         setShowSubAlert(false);
         alertShownRef.current = false;
+        alertDismissedAtRef.current = Date.now();
         return;
       }
     }
@@ -937,6 +948,7 @@ export function useMatchState() {
     setSubTimer(Math.max(0, overshoot));
     setShowSubAlert(false);
     alertShownRef.current = false;
+    alertDismissedAtRef.current = Date.now();
     setActiveSlotIndex(-1);
     subLatencyRef.current = 0;
     addEvent({ type: 'sub_auto', time: fmt(matchTimer), half: currentHalf, out: [...out], inn: [...inn] });
@@ -947,6 +959,7 @@ export function useMatchState() {
     if (activeSlotIndex >= 0 && subSchedule[activeSlotIndex]?.status !== 'pending') {
       setShowSubAlert(false);
       alertShownRef.current = false;
+      alertDismissedAtRef.current = Date.now();
       return;
     }
     // Markeer slot als skipped in schema + herbereken resterende slots
@@ -970,6 +983,7 @@ export function useMatchState() {
     setSubTimer(Math.max(0, overshoot));
     setShowSubAlert(false);
     alertShownRef.current = false;
+    alertDismissedAtRef.current = Date.now();
     setActiveSlotIndex(-1);
     subLatencyRef.current = 0;
     addEvent({ type: 'sub_skipped', time: fmt(matchTimer), half: currentHalf });
